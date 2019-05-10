@@ -27,7 +27,7 @@ import Data.Maybe(catMaybes)
 -------------------------------------------------------------------------------------------
 
 -- Typ danych wynikowych dla wyrażeń.
-data Value = ValueInteger Integer | ValueBool Bool
+data Value = ValueInteger Integer | ValueBool Bool | ValueVoid | ValueString String 
     deriving(Eq, Ord, Show, Read)
 
 -- TODO inne typy ???

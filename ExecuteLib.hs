@@ -32,7 +32,14 @@ executeProgram :: Program -> InterpretMonad ()
 
 -- Funkcja interpretująca wykonanie pustego programu.
 executeProgram (ProgramS []) = do
-    executeFunction $ Ident "main"
+    object <- getObject (Ident "main")
+    case object of
+        (Right (FnDef Int _ [] _)) -> do
+            retVal <- executeFunction (Ident "main") []
+            case retVal of
+                (ValueInteger 0) -> return ()
+                (ValueInteger r) -> throwError $ "Program failed with exit code " ++ show r ++ "."
+        _ -> throwError $ "Main function is not defined."
 
 -- Funkcja interpretująca wykonanie niepustego programu.
 executeProgram (ProgramS (definition:definitions)) = do
@@ -45,16 +52,45 @@ executeProgram (ProgramS (definition:definitions)) = do
 -- Interpretery funkcji.
 -------------------------------------------------------------------------------------------
 
-executeFunction :: Ident -> InterpretMonad ()
+executeFunction :: Ident -> [Expr] -> InterpretMonad Value
 
 -- Funkcja interpretująca wykonanie funkcji. 
-executeFunction ident = do
-    object <- getObject ident
-    case object of
-        -- TODO add function arguments to the block ???
-        (Right (FnDef _ _ _ block)) -> do
-            executeBlock block
-        -- _ -> let (Ident i) = ident in throwError $ "Function `" ++ i ++ "` was not declared in this scope."
+executeFunction ident exprs = do
+    case ident of
+        (Ident "printInt") -> case exprs of
+            [] -> do
+                return ValueVoid
+            (e:ex) -> do
+                val <- execExpr e
+                case val of 
+                    (ValueInteger i) -> do
+                        liftIO $ putStr $ (show i ++ " ")
+                    _ -> throwError $ "Cannot printInt expression that is not of Int type."
+                executeFunction (Ident "printInt") ex
+        (Ident "printString") -> case exprs of
+            [] -> do
+                return ValueVoid
+            (e:ex) -> do
+                val <- execExpr e
+                case val of 
+                    (ValueString s) -> do
+                        liftIO $ putStr $ s
+                        return ValueVoid
+                    _ -> throwError $ "Cannot printString expression that is not of String type."
+                executeFunction (Ident "printString") ex
+        _ -> do
+            object <- getObject ident
+            case object of
+                -- TODO add function arguments to the block ???
+                (Right (FnDef t _ _ block)) -> do
+                    executeBlock block
+                    case t of
+                        -- TODO of course its a mock should return val
+                        Int -> return (ValueInteger 0)
+                        Str -> return (ValueString "")
+                        Bool -> return (ValueBool False)
+                        Void -> return ValueVoid
+                -- _ -> let (Ident i) = ident in throwError $ "Function `" ++ i ++ "` was not declared in this scope."
 
 -------------------------------------------------------------------------------------------
 -- Interpretery bloku.
@@ -126,6 +162,33 @@ executeStmt (Decr ident) = do
         -- TODO print types ???
         _ -> let (Ident i) = ident in throwError $ "Cannot decrement `" ++ i ++ "` which is not of Int type."
 
+executeStmt (Cond expr stmt) = do
+    val <- execExpr expr
+    case val of
+        (ValueBool True) -> executeStmt stmt
+        (ValueBool False) -> return ()
+        _ -> throwError $ "If expression is not of Bool type."
+
+executeStmt (CondElse expr stmt1 stmt2) = do
+    val <- execExpr expr
+    case val of
+        (ValueBool True) -> executeStmt stmt1
+        (ValueBool False) -> executeStmt stmt2
+        _ -> throwError $ "If expression is not of Bool type."
+
+executeStmt (While expr stmt) = do
+    val <- execExpr expr
+    case val of
+        (ValueBool True) -> do
+            executeStmt stmt
+            executeStmt (While expr stmt)
+        (ValueBool False) -> return ()
+        _ -> throwError $ "While expression is not of Bool type."
+
+executeStmt (SExp expr) = do
+    execExpr expr
+    return ()
+
 executeStmtDecls :: Type -> [Item] -> InterpretMonad ()
 
 -- Funkcja interpretująca deklarację pustej listy obiektów.
@@ -146,6 +209,9 @@ executeStmtDecl t (NoInit ident) = do
     case t of
         Int -> updateStore location (Left (ValueInteger 0))
         Bool -> updateStore location (Left (ValueBool False))
+        Str -> updateStore location (Left (ValueString ""))
+        Void -> updateStore location (Left ValueVoid)
+        _ -> throwError $ "Unknown type."
 
 -- Funkcja interpretująca deklarację obiektu z inicjalizacją.
 executeStmtDecl t (Init ident expr) = do
@@ -155,6 +221,8 @@ executeStmtDecl t (Init ident expr) = do
     case (t, value) of
         (Int, (ValueInteger _)) -> updateStore location (Left value)
         (Bool, (ValueBool _)) -> updateStore location (Left value)
+        (Str, (ValueString _)) -> updateStore location (Left value)
+        (Void, ValueVoid) -> updateStore location (Left value)
         _ -> let (Ident i) = ident in throwError $ "Cannot assign to `" ++ i ++ "` an expression which is not of " ++ show t ++ " type."
 
 
@@ -246,3 +314,9 @@ execExpr (ELitTrue) = do
 -- Funkcja interpretująca literał "fałsz".
 execExpr (ELitFalse) = do
     return $ ValueBool False
+
+execExpr (EApp i exprs) = do
+    executeFunction i exprs
+
+execExpr (EString s) = do
+    return $ ValueString s
