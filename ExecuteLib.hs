@@ -238,6 +238,8 @@ executeStmt (Ass ident exp) = do
     case (object, newValue) of
         (Left (ValueInteger _), ValueInteger _) -> updateStore location (Left newValue)
         (Left (ValueBool _), ValueBool _) -> updateStore location (Left newValue)
+        (Left (ValueString _), ValueString _) -> updateStore location (Left newValue)
+        (Left ValueVoid, ValueVoid) -> updateStore location (Left newValue)
         -- TODO print types ???
         _ -> let (Ident i) = ident in throwError $ "Cannot assign to `" ++ i ++ "` an expression of diffrent type."
 
