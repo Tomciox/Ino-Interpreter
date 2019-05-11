@@ -28,7 +28,7 @@ putStrV :: Verbosity -> String -> IO ()
 putStrV v s = if v > 1 then putStrLn s else return ()
 
 runFile :: Verbosity -> ParseFun Program -> FilePath -> IO ()
-runFile v p f = putStrLn f >> readFile f >>= run v p
+runFile v p f = readFile f >>= run v p
 
 run :: Verbosity -> ParseFun Program -> String -> IO ()
 run v p s = let ts = myLLexer s in case p ts of

@@ -17,7 +17,7 @@ import AbsIno
 import qualified Data.Map as Map
 
 -------------------------------------------------------------------------------------------
--- Funkcja uruchamiajaca interpretację zadaneo programu.
+-- Funkcja uruchamiajaca interpretację zadanego programu.
 -------------------------------------------------------------------------------------------
 
 runProgram :: Program -> IO ()

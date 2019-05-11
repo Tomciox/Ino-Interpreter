@@ -87,11 +87,15 @@ runInterpretMonad m state = runExceptT (runStateT m state)
 -------------------------------------------------------------------------------------------
 
 releaseLocation :: Location -> InterpretMonad ()
+
+-- Funkcja zwalniająca pamięć pod zadaną lokacją.
 releaseLocation location = do 
     locations <- getFreeLocations
     putFreeLocations (location:locations)
 
 releaseLocations :: [Location] -> InterpretMonad ()
+
+-- Funkcja zwalniająca pamięć pod zadanymi lokacjami.
 releaseLocations [] = do
     return ()
 
@@ -155,6 +159,6 @@ getObject ident =  do
     store <- getStore 
     case (Map.lookup location store) of
         Nothing -> let (Ident i) = ident in 
+            -- To nie może się zdarzyć.
             throwError $ "`" ++ i ++ "` was not allocated in this scope."
         (Just object) -> return object
-

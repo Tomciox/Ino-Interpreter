@@ -54,7 +54,7 @@ executeProgram (ProgramS (definition:definitions)) = do
 
 executeFunction :: Ident -> [Expr] -> InterpretMonad Value
 
--- Funkcja interpretująca wykonanie funkcji. 
+-- Interpretacja wywołania funkcji. 
 executeFunction ident exprs = do
     case ident of
         (Ident "printInt") -> case exprs of
@@ -97,15 +97,20 @@ executeFunction ident exprs = do
                         Void -> return ValueVoid
                 -- _ -> let (Ident i) = ident in throwError $ "Function `" ++ i ++ "` was not declared in this scope."
 
+-- Typ wartości argumentu w trakcie parsowania. Jeśli jest przez wartość, to argument jest wyliczany, jeśli przez referencję, przekazywana jest lokacja.
 data FunArgVal = FunArgValue Value | FunArgLocation Location
 
 addArgs :: String -> [Arg] -> [Expr] -> InterpretMonad ()
+
+-- Wylicznie i dodanie argumentów funkcji do środowiska/pamięci, przed jej uruchomieniem.
 addArgs s args exprs = do
     parsedArgs <- parseArgs s args exprs
     updateArgs args parsedArgs
     return ()
 
 parseArgs :: String -> [Arg] -> [Expr] -> InterpretMonad [FunArgVal]
+
+-- Wyliczenie wartości argumentów, przed uruchomieniem funkcji, w zależności od tego czy są przekazane przez wartość, czy referencję.
 parseArgs s [] [] = do
     return []
 
@@ -120,7 +125,10 @@ parseArgs s (arg:args) _ = do
 parseArgs s _ (expr:exprs) = do
     throwError $ "Too many arguments of function " ++ s ++ "."
 
+
 parseArg :: String -> Arg -> Expr -> InterpretMonad FunArgVal
+
+-- Wyliczenie wartości jednego argumentu, przed uruchomieniem funkcji, w zależności od tego czy jest on przekazany przez wartość, czy referencję.
 parseArg s (ValueArg t ident) expr = do
     value <- executeExpr expr
     case (t, value) of
@@ -135,7 +143,7 @@ parseArg s (RefArg t ident) expr = do
         (EVar passedIdent) -> do
             value <- executeExpr expr
             case (t, value) of
-                -- very ugly mock for type of argument
+                -- TODO very ugly mock for type of argument ???
                 (Int, (ValueInteger _)) -> do
                     location <- getLocation passedIdent
                     return $ FunArgLocation location
@@ -152,6 +160,8 @@ parseArg s (RefArg t ident) expr = do
         _ -> throwError $ "An argument of function `" ++ s ++ "` passed by reference is not an identifier."
 
 updateArgs :: [Arg] -> [FunArgVal] -> InterpretMonad ()
+
+-- Dodanie argumentów funkcji przed jej uruchomieniem do środowiska/pamięci w którym będzie działać.
 updateArgs [] [] = do
     return ()
 
@@ -161,6 +171,8 @@ updateArgs (arg:args) (funArgVal:funArgVals) = do
     return ()
 
 updateArg :: Arg -> FunArgVal -> InterpretMonad ()
+
+-- Dodanie argumentu funkcji przed jej uruchomieniem do środowiska/pamięci w którym będzie działać.
 updateArg (ValueArg t ident) (FunArgValue value) = do
     location <- alloc
     modifyEnvironment (updateEnvironment ident location)
@@ -170,6 +182,8 @@ updateArg (RefArg t ident) (FunArgLocation location) = do
     modifyEnvironment (updateEnvironment ident location)
 
 releaseArgs :: [Arg] -> InterpretMonad ()
+
+-- Zwolnienie argumentów funkcji po jej uruchomieniu ze środowiska/pamięci w którym działała.
 releaseArgs [] = do
     return ()
 
@@ -178,6 +192,8 @@ releaseArgs (arg:args) = do
     releaseArgs args
 
 releaseArg :: Arg -> InterpretMonad ()
+
+-- Zwolnienie argumentu funkcji po jej uruchomieniu ze środowiska/pamięci w którym działała.
 releaseArg (ValueArg t ident) = do
     location <- getLocation ident
     releaseLocation location
@@ -261,6 +277,7 @@ executeStmt (Decr ident) = do
         -- TODO print types ???
         _ -> let (Ident i) = ident in throwError $ "Cannot decrement `" ++ i ++ "` which is not of Int type."
 
+-- Funkcja interpretująca wykonanie statementu warunku if bez else.
 executeStmt (Cond expr stmt) = do
     val <- executeExpr expr
     case val of
@@ -268,6 +285,7 @@ executeStmt (Cond expr stmt) = do
         (ValueBool False) -> return ()
         _ -> throwError $ "If expression is not of Bool type."
 
+-- Funkcja interpretująca wykonanie statementu warunku if z else.
 executeStmt (CondElse expr stmt1 stmt2) = do
     val <- executeExpr expr
     case val of
@@ -275,6 +293,7 @@ executeStmt (CondElse expr stmt1 stmt2) = do
         (ValueBool False) -> executeBlock (BlockS [stmt2])
         _ -> throwError $ "If expression is not of Bool type."
 
+-- Funkcja interpretująca wykonanie statementu pętli while.
 executeStmt (While expr stmt) = do
     val <- executeExpr expr
     case val of
@@ -284,6 +303,7 @@ executeStmt (While expr stmt) = do
         (ValueBool False) -> return ()
         _ -> throwError $ "While expression is not of Bool type."
 
+-- Funkcja interpretująca wykonanie statementu będącego wyrażniem.
 executeStmt (SExp expr) = do
     executeExpr expr
     return ()
@@ -310,6 +330,7 @@ executeStmtDecl t (NoInit ident) = do
         Bool -> updateStore location (Left (ValueBool False))
         Str -> updateStore location (Left (ValueString ""))
         Void -> updateStore location (Left ValueVoid)
+        -- To nie może się zdarzyć.
         _ -> throwError $ "Unknown type."
 
 -- Funkcja interpretująca deklarację obiektu z inicjalizacją.
@@ -349,7 +370,7 @@ executeExpr (EAdd exp1 op exp2) = do
         (ValueInteger i1, ValueInteger i2) -> case op of
             Plus -> return $ ValueInteger (i1 + i2)
             Minus -> return $ ValueInteger (i1 - i2)
-        _ -> throwError $ "Cannot apply any AddOperation to expressions of different types."
+        _ -> throwError $ "Cannot apply any ADD operation on expressions of different types than Int."
 
 -- Funkcja interpretująca iloczyn dwóch wyrażeń.
 executeExpr (EMul exp1 op exp2) = do
@@ -360,7 +381,7 @@ executeExpr (EMul exp1 op exp2) = do
             Times -> return $ ValueInteger (i1 * i2)
             Div -> return $ ValueInteger (i1 `div` i2)
             Mod -> return $ ValueInteger (i1 `mod` i2)
-        _ -> throwError $ "Cannot apply any MulOperation to expressions of different types."
+        _ -> throwError $ "Cannot apply any MUL operation on expressions of different types than Int."
 
 -- Funkcja interpretująca porównanie dwóch wyrażeń.
 executeExpr (ERel exp1 op exp2) = do
@@ -374,7 +395,7 @@ executeExpr (ERel exp1 op exp2) = do
             GE -> return $ ValueBool (i1 >= i2)
             EQU -> return $ ValueBool (i1 == i2)
             NE -> return $ ValueBool (i1 /= i2)
-        _ -> throwError $ "Cannot apply RelOperation to expressions of different types."
+        _ -> throwError $ "Cannot apply any RELATION operation on expressions of different types than Int."
 
 -- Funkcja interpretująca sumę logiczną dwóch wyrażeń.
 executeExpr (EAnd exp1 exp2) = do
@@ -382,7 +403,7 @@ executeExpr (EAnd exp1 exp2) = do
     val2 <- executeExpr exp2
     case (val1, val2) of
         (ValueBool i1, ValueBool i2) -> return $ ValueBool (i1 && i2)
-        _ -> throwError $ "Cannot apply RelOperation to expressions of different types."
+        _ -> throwError $ "Cannot apply AND operation to expressions of different types than Bool."
 
 -- Funkcja interpretująca alternatywę logiczną dwóch wyrażeń.
 executeExpr (EOr exp1 exp2) = do
@@ -390,21 +411,21 @@ executeExpr (EOr exp1 exp2) = do
     val2 <- executeExpr exp2
     case (val1, val2) of
         (ValueBool i1, ValueBool i2) -> return $ ValueBool (i1 || i2)
-        _ -> throwError $ "Cannot apply RelOperation to expressions of different types."
+        _ -> throwError $ "Cannot apply OR operation to expressions of different types than Bool."
 
 -- Funkcja interpretująca wyrażenie przeciwne.
 executeExpr (Neg exp) = do
     val <- executeExpr exp
     case val of
         ValueInteger i -> return $ ValueInteger (negate i)
-        _ -> throwError $ "Cannot apply NegOperation to expression which is not of Int type."
+        _ -> throwError $ "Cannot apply NEG to expression which is not of Int type."
 
 -- Funkcja interpretująca negację wyrażenia.
 executeExpr (Not exp) = do
     val <- executeExpr exp
     case val of
         ValueBool i -> return $ ValueBool (not i)
-        _ -> throwError $ "Cannot apply NotOperation to expression which is not of Bool type."
+        _ -> throwError $ "Cannot apply NOT to expression which is not of Bool type."
     
 -- Funkcja interpretująca literał "prawda".
 executeExpr (ELitTrue) = do
@@ -414,8 +435,10 @@ executeExpr (ELitTrue) = do
 executeExpr (ELitFalse) = do
     return $ ValueBool False
 
+-- Funkcja interpretująca aplikację funkcji do wyrażeń.
 executeExpr (EApp i exprs) = do
     executeFunction i exprs
 
+-- Funkcja interpretująca ciąg znaków.
 executeExpr (EString s) = do
     return $ ValueString s
