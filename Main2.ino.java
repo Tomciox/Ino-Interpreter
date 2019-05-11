@@ -52,7 +52,33 @@ int main() {
 	printInt(u) ;
 	printString("\n") ;
 
-	int ctr = 0 ;
-	while(true)
-		int x ;
+	// int ctr = 0 ;
+	// while(true) {
+	// 	int x ;
+	// 	int x ;
+	// }
+
+	printString("Args by value/reference\n") ;
+	
+	int x = 2222222222, y = 3333333333 ;
+	printString("x, y:\n") ;
+	printInt(x, y) ;
+	printString("\n") ;
+	f(1, y) ;
+	printString("x, y:\n") ;
+	printInt(x, y) ;
+	printString("\n") ;
+}
+
+void f (int a, int &b) {
+	printString("a, b:\n") ;
+	printInt(a, b) ;
+	printString("\n") ;
+
+	a = a * 2 ;
+	b = b * 3 ;
+
+	printString("a, b:\n") ;
+	printInt(a, b) ;
+	printString("\n") ;
 }

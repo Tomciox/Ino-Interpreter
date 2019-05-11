@@ -46,7 +46,7 @@ type Location = Int
 
 -- Definicja początkowo wolnych lokacji.
 initialFreeLocations :: [Location]
-initialFreeLocations = [1..2^10]
+initialFreeLocations = [1..100]
 
 -- Definicja typu środowiska programu.
 type Environment = Map.Map Ident Location
@@ -157,3 +157,4 @@ getObject ident =  do
         Nothing -> let (Ident i) = ident in 
             throwError $ "`" ++ i ++ "` was not allocated in this scope."
         (Just object) -> return object
+
