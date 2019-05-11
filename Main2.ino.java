@@ -43,10 +43,16 @@ int main() {
 	// operacje arytmetyczne
 	int x5 = 10 / 3;
 
-	rec();
-}
+	int u = 10 ;
+	{
+		int u = 9 ;
+	}
 
-void rec() {
-	printString("loop", "\n") ;
-	rec();
+	printString("u: ") ;
+	printInt(u) ;
+	printString("\n") ;
+
+	int ctr = 0 ;
+	while(true)
+		int x ;
 }

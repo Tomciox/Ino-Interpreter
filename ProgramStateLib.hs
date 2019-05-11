@@ -46,10 +46,10 @@ type Location = Int
 
 -- Definicja początkowo wolnych lokacji.
 initialFreeLocations :: [Location]
-initialFreeLocations = [1..2^16]
+initialFreeLocations = [1..2^10]
 
 -- Definicja typu środowiska programu.
-type Environment = Map.Map Ident [Location]
+type Environment = Map.Map Ident Location
 
 -- Definicja początkowo pustego środowiska programu.
 initialEnvironment :: Environment
@@ -86,7 +86,18 @@ runInterpretMonad m state = runExceptT (runStateT m state)
 -- Funkcje pomocnicze.
 -------------------------------------------------------------------------------------------
 
--- TODO Zwalnianie lokacji pamięci ???
+releaseLocation :: Location -> InterpretMonad ()
+releaseLocation location = do 
+    locations <- getFreeLocations
+    putFreeLocations (location:locations)
+
+releaseLocations :: [Location] -> InterpretMonad ()
+releaseLocations [] = do
+    return ()
+
+releaseLocations (location:locations) = do
+    releaseLocation location
+    releaseLocations locations
 
 -- Funkcja aktualizująca pamięć programu o nową wartość pod zadaną lokacją.
 updateStore :: Location -> Object -> InterpretMonad ()
@@ -121,15 +132,12 @@ modifyEnvironment f = do
 
 -- Funkcja dokładająca do środowiska nowy identyfikator o zadanej lokacji.
 updateEnvironment :: Ident -> Location -> Environment -> Environment
-updateEnvironment ident location = Map.insertWith (++) ident [location] 
+updateEnvironment ident location = Map.insert ident location
 
 -- Funkcja zwracająca lokację zadanego identyfikatora.
 lookupEnvironment :: Ident -> Environment -> Maybe Location
 lookupEnvironment ident environment = do
-    locations <- Map.lookup ident environment 
-    case locations of
-        [] -> Nothing
-        (location:_) -> return location
+    Map.lookup ident environment 
 
 -- Funkcja zwracająca lokację, na którą wskazuje zadany identyfikator.
 getLocation :: Ident -> InterpretMonad Location

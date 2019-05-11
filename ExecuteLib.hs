@@ -98,10 +98,14 @@ executeFunction ident exprs = do
 
 executeBlock :: Block -> InterpretMonad ()
 
--- TODO scopes ???
 -- Funkcja interpretująca wykonanie bloku.
 executeBlock (BlockS stmts) = do
+    env <- getEnvironment
     executeStmts stmts
+    blockEnv <- getEnvironment
+    let diff = Map.difference blockEnv env in 
+        releaseLocations $ Map.elems diff
+    putEnvironment env
 
 -------------------------------------------------------------------------------------------
 -- Interpretery statementów.
@@ -125,8 +129,8 @@ executeStmt (Empty) = do
     return ()
 
 -- Funkcja interpretująca wykonanie statementu będącego nowym blokiem.
-executeStmt (BStmt (BlockS stmts)) = do
-    executeStmts stmts
+executeStmt (BStmt b) = do
+    executeBlock b
 
 -- Funkcja interpretująca wykonanie statementu deklaracji.
 executeStmt (Decl t declarations) = do
@@ -165,22 +169,22 @@ executeStmt (Decr ident) = do
 executeStmt (Cond expr stmt) = do
     val <- execExpr expr
     case val of
-        (ValueBool True) -> executeStmt stmt
+        (ValueBool True) -> executeBlock (BlockS [stmt])
         (ValueBool False) -> return ()
         _ -> throwError $ "If expression is not of Bool type."
 
 executeStmt (CondElse expr stmt1 stmt2) = do
     val <- execExpr expr
     case val of
-        (ValueBool True) -> executeStmt stmt1
-        (ValueBool False) -> executeStmt stmt2
+        (ValueBool True) -> executeBlock (BlockS [stmt1])
+        (ValueBool False) -> executeBlock (BlockS [stmt2])
         _ -> throwError $ "If expression is not of Bool type."
 
 executeStmt (While expr stmt) = do
     val <- execExpr expr
     case val of
         (ValueBool True) -> do
-            executeStmt stmt
+            executeBlock (BlockS [stmt])
             executeStmt (While expr stmt)
         (ValueBool False) -> return ()
         _ -> throwError $ "While expression is not of Bool type."
