@@ -34,18 +34,18 @@ executeProgram :: Program -> InterpretMonad ()
 executeProgram (ProgramS []) = do
     object <- getObject (Ident "main")
     case object of
-        (Right (FnDef Int _ [] _)) -> do
+        (ObjectTopDef (FnDef Int _ [] _)) -> do
             retVal <- executeFunction (Ident "main") []
             case retVal of
+                -- TODO
                 (ValueInteger 0) -> return ()
                 (ValueInteger r) -> throwError $ "Program failed with exit code " ++ show r ++ "."
         _ -> throwError $ "Main function is not defined."
 
 -- Funkcja interpretująca wykonanie niepustego programu.
 executeProgram (ProgramS (definition:definitions)) = do
-    location <- alloc
-    let (FnDef _ ident _ _) = definition in modifyEnvironment (updateEnvironment ident location)
-    updateStore location (Right definition)
+    depth <- getDepth
+    let (FnDef t ident _ _) = definition in putNew ident t depth (ObjectTopDef definition)
     executeProgram (ProgramS definitions)
 
 -------------------------------------------------------------------------------------------
@@ -81,21 +81,26 @@ executeFunction ident exprs = do
         _ -> do
             object <- getObject ident
             case object of
-                (Right (FnDef t (Ident s) args block)) -> do
+                (ObjectTopDef (FnDef t (Ident s) args (BlockS stmts))) -> do
                     env <- getEnvironment
+                    depth <- getDepth
+                    putDepth (depth + 1)
                     
                     addArgs s args exprs
-                    executeBlock block
+
+                    executeStmts stmts
+
                     releaseArgs args
 
                     putEnvironment env
+                    putDepth depth
                     case t of
                         -- TODO of course its a mock should return exact value
                         Int -> return (ValueInteger 0)
                         Str -> return (ValueString "")
                         Bool -> return (ValueBool False)
                         Void -> return ValueVoid
-                -- _ -> let (Ident i) = ident in throwError $ "Function `" ++ i ++ "` was not declared in this scope."
+                _ -> let (Ident i) = ident in throwError $ "Function `" ++ i ++ "` was not declared in this scope."
 
 -- Typ wartości argumentu w trakcie parsowania. Jeśli jest przez wartość, to argument jest wyliczany, jeśli przez referencję, przekazywana jest lokacja.
 data FunArgVal = FunArgValue Value | FunArgLocation Location
@@ -125,36 +130,21 @@ parseArgs s (arg:args) _ = do
 parseArgs s _ (expr:exprs) = do
     throwError $ "Too many arguments of function " ++ s ++ "."
 
-
 parseArg :: String -> Arg -> Expr -> InterpretMonad FunArgVal
 
 -- Wyliczenie wartości jednego argumentu, przed uruchomieniem funkcji, w zależności od tego czy jest on przekazany przez wartość, czy referencję.
 parseArg s (ValueArg t ident) expr = do
     value <- executeExpr expr
-    case (t, value) of
-        (Int, (ValueInteger _)) -> return $ FunArgValue value
-        (Bool, (ValueBool _)) -> return $ FunArgValue value
-        (Str, (ValueString _)) -> return $ FunArgValue value
-        (Void, ValueVoid) -> return $ FunArgValue value
+    let exprT = getValueType value in case (t == exprT) of
+        True -> return $ FunArgValue value
         _ -> let (Ident i) = ident in throwError $ "Invalid type of one argument passed by value of function `" ++ s ++ "`."
 
 parseArg s (RefArg t ident) expr = do 
     case expr of 
         (EVar passedIdent) -> do
-            value <- executeExpr expr
-            case (t, value) of
-                -- TODO very ugly mock for type of argument ???
-                (Int, (ValueInteger _)) -> do
-                    location <- getLocation passedIdent
-                    return $ FunArgLocation location
-                (Bool, (ValueBool _)) -> do
-                    location <- getLocation passedIdent
-                    return $ FunArgLocation location
-                (Str, (ValueString _)) -> do
-                    location <- getLocation passedIdent
-                    return $ FunArgLocation location
-                (Void, ValueVoid) -> do
-                    location <- getLocation passedIdent
+            (Info location passedIdentT _) <- getIdentInfo passedIdent
+            case (t == passedIdentT) of
+                True -> do
                     return $ FunArgLocation location
                 _ -> throwError $ "Invalid type of one argument passed by reference of function `" ++ s ++ "`."
         _ -> throwError $ "An argument of function `" ++ s ++ "` passed by reference is not an identifier."
@@ -175,11 +165,13 @@ updateArg :: Arg -> FunArgVal -> InterpretMonad ()
 -- Dodanie argumentu funkcji przed jej uruchomieniem do środowiska/pamięci w którym będzie działać.
 updateArg (ValueArg t ident) (FunArgValue value) = do
     location <- alloc
-    modifyEnvironment (updateEnvironment ident location)
-    updateStore location (Left value)
+    depth <- getDepth
+    modifyEnvironment (updateEnvironment ident (Info location t depth))
+    updateStore location (ObjectValue value)
 
 updateArg (RefArg t ident) (FunArgLocation location) = do
-    modifyEnvironment (updateEnvironment ident location)
+    depth <- getDepth
+    modifyEnvironment (updateEnvironment ident (Info location t depth))
 
 releaseArgs :: [Arg] -> InterpretMonad ()
 
@@ -195,7 +187,7 @@ releaseArg :: Arg -> InterpretMonad ()
 
 -- Zwolnienie argumentu funkcji po jej uruchomieniu ze środowiska/pamięci w którym działała.
 releaseArg (ValueArg t ident) = do
-    location <- getLocation ident
+    (Info location t depth) <- getIdentInfo ident
     releaseLocation location
 
 releaseArg (RefArg t ident) = do 
@@ -211,11 +203,18 @@ executeBlock :: Block -> InterpretMonad ()
 -- Funkcja interpretująca wykonanie bloku.
 executeBlock (BlockS stmts) = do
     env <- getEnvironment
+    depth <- getDepth
+    putDepth (depth + 1)
+
     executeStmts stmts
+
     blockEnv <- getEnvironment
-    let diff = Map.difference blockEnv env in 
-        releaseLocations $ Map.elems diff
+
+    let diff = Map.differenceWith (\ x y -> if x == y then Nothing else (Just y)) blockEnv env in 
+        releaseLocations $ map (\(Info l _ _) -> l) (Map.elems diff)
+
     putEnvironment env
+    putDepth depth
 
 -------------------------------------------------------------------------------------------
 -- Interpretery statementów.
@@ -248,34 +247,29 @@ executeStmt (Decl t declarations) = do
 
 -- Funkcja interpretująca wykonanie statementu przypisania.
 executeStmt (Ass ident exp) = do
-    location <- getLocation ident
-    object <- getObject ident
+    (Info location t _) <- getIdentInfo ident
     newValue <- executeExpr exp
-    case (object, newValue) of
-        (Left (ValueInteger _), ValueInteger _) -> updateStore location (Left newValue)
-        (Left (ValueBool _), ValueBool _) -> updateStore location (Left newValue)
-        (Left (ValueString _), ValueString _) -> updateStore location (Left newValue)
-        (Left ValueVoid, ValueVoid) -> updateStore location (Left newValue)
-        -- TODO print types ???
-        _ -> let (Ident i) = ident in throwError $ "Cannot assign to `" ++ i ++ "` an expression of diffrent type."
+    let newValueType = getValueType newValue in case (t == newValueType) of
+        True -> updateStore location (ObjectValue newValue)
+        _ -> let (Ident i) = ident in throwError $ "Cannot assign to `" ++ i ++ "` which is of " ++ show t ++ " type, an expression of " ++ show newValueType ++ " type."
 
 -- Funkcja interpretująca wykonanie statementu inkrementacji zmiennej.
 executeStmt (Incr ident) = do
-    location <- getLocation ident
-    object <- getObject ident
-    case object of
-        (Left (ValueInteger value)) -> updateStore location (Left (ValueInteger (value + 1)))
-        -- TODO print types ???
-        _ -> let (Ident i) = ident in throwError $ "Cannot increment `" ++ i ++ "` which is not of Int type."
+    (Info location t _) <- getIdentInfo ident
+    case t of
+        Int -> do
+            (ObjectValue (ValueInteger value)) <- getObject ident
+            updateStore location (ObjectValue (ValueInteger (value + 1)))
+        _ -> let (Ident i) = ident in throwError $ "Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
 
 -- Funkcja interpretująca wykonanie statementu dekrementacji zmiennej.
 executeStmt (Decr ident) = do
-    location <- getLocation ident
-    object <- getObject ident
-    case object of
-        (Left (ValueInteger value)) -> updateStore location (Left (ValueInteger (value - 1)))
-        -- TODO print types ???
-        _ -> let (Ident i) = ident in throwError $ "Cannot decrement `" ++ i ++ "` which is not of Int type."
+    (Info location t _) <- getIdentInfo ident
+    case t of
+        Int -> do
+            (ObjectValue (ValueInteger value)) <- getObject ident
+            updateStore location (ObjectValue (ValueInteger (value - 1)))
+        _ -> let (Ident i) = ident in throwError $ "Cannot decrement `" ++ i ++ "` which is of " ++ show t ++ " type."
 
 -- Funkcja interpretująca wykonanie statementu warunku if bez else.
 executeStmt (Cond expr stmt) = do
@@ -323,29 +317,29 @@ executeStmtDecl :: Type -> Item -> InterpretMonad ()
 
 -- Funkcja interpretująca deklarację obiektu bez jawnej inicjalizacji.
 executeStmtDecl t (NoInit ident) = do
-    location <- alloc
-    modifyEnvironment (updateEnvironment ident location)
-    case t of
-        Int -> updateStore location (Left (ValueInteger 0))
-        Bool -> updateStore location (Left (ValueBool False))
-        Str -> updateStore location (Left (ValueString ""))
-        Void -> updateStore location (Left ValueVoid)
-        -- To nie może się zdarzyć.
-        _ -> throwError $ "Unknown type."
+    executeStmtDeclHelper t ident (getDefaultValue t)
 
 -- Funkcja interpretująca deklarację obiektu z inicjalizacją.
 executeStmtDecl t (Init ident expr) = do
-    location <- alloc
-    modifyEnvironment (updateEnvironment ident location)
-    value <- executeExpr expr
-    case (t, value) of
-        (Int, (ValueInteger _)) -> updateStore location (Left value)
-        (Bool, (ValueBool _)) -> updateStore location (Left value)
-        (Str, (ValueString _)) -> updateStore location (Left value)
-        (Void, ValueVoid) -> updateStore location (Left value)
-        _ -> let (Ident i) = ident in throwError $ "Cannot assign to `" ++ i ++ "` an expression which is not of " ++ show t ++ " type."
+    value <- executeExpr expr 
+    executeStmtDeclHelper t ident value
 
-
+-- Funkcja pomocnicza dodająca do środowiska i pamięci nową zmienną o zadanym typie i wartości.
+executeStmtDeclHelper :: Type -> Ident -> Value -> InterpretMonad ()
+executeStmtDeclHelper t ident value = do
+    let valueType = getValueType value in case (t == valueType) of
+        True -> do
+            maybeIdentInfo <- getMaybeIdentInfo ident
+            actualDepth <- getDepth
+            case maybeIdentInfo of
+                (Just (Info location _ depth)) -> do 
+                    case (depth < actualDepth) of
+                        True -> putNew ident t actualDepth (ObjectValue value)
+                        False -> let (Ident i) = ident in throwError $ "Redeclaration of `" ++ i ++ "`."
+                Nothing -> do
+                    putNew ident t actualDepth (ObjectValue value)
+        False -> let (Ident i) = ident in throwError $ "Cannot initialize `" ++ i ++ "` which is of " ++ show t ++ " type, with an expression of " ++ show valueType ++ " type."
+        
 -------------------------------------------------------------------------------------------
 -- Interpretery wyrażeń.
 -------------------------------------------------------------------------------------------
@@ -359,8 +353,7 @@ executeExpr (ELitInt value) = return $ ValueInteger value
 executeExpr (EVar ident) = do
     value <- getObject ident
     case value of
-        (Left v) -> return $ v
-        -- _ -> let (Ident i) = ident in throwError $ "`" ++ i ++ "` was not declared in this scope."
+        (ObjectValue v) -> return $ v
 
 -- Funkcja interpretująca sumę dwóch wyrażeń.
 executeExpr (EAdd exp1 op exp2) = do

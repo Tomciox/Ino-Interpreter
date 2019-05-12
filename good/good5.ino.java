@@ -15,12 +15,10 @@ int main () {
 			printString("\n") ;
 		}
 
-		int x = 2;
 		printInt(x) ;
 		printString("\n") ;
 	}
 
-	int x = 1;
 	printInt(x) ;
 	printString("\n") ;
 }

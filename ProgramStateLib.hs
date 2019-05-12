@@ -30,9 +30,31 @@ import Data.Maybe(catMaybes)
 data Value = ValueInteger Integer | ValueBool Bool | ValueVoid | ValueString String 
     deriving(Eq, Ord, Show, Read)
 
+-- Funkcja zwracająca typ danej wartości.
+getValueType :: Value -> Type
+getValueType (ValueInteger _) = Int
+getValueType (ValueBool _) = Bool
+getValueType ValueVoid = Void
+getValueType (ValueString _) = Str
+
+-- Funkcja zwracająca domyślna wartość zadanego typu.
+getDefaultValue :: Type -> Value
+getDefaultValue Int = ValueInteger 0
+getDefaultValue Bool = ValueBool False
+getDefaultValue Void = ValueVoid
+getDefaultValue Str = ValueString ""
+
 -- TODO inne typy ???
 -- Definicja typu przechowywanego w pamięci stanu programu.
-type Object = Either Value TopDef
+data Object = ObjectValue Value | ObjectTopDef TopDef
+    deriving(Eq, Ord, Show, Read)
+
+-- Definicja typu aktualnej głębokości drzewa interpretacji.
+type Depth = Int
+
+-- Definicja początkowej głębokości drzewa.
+initialDepth :: Depth
+initialDepth = 0
 
 -- Definicja typu pamięci programu.
 type Store = Map.Map Location Object
@@ -49,7 +71,10 @@ initialFreeLocations :: [Location]
 initialFreeLocations = [1..100]
 
 -- Definicja typu środowiska programu.
-type Environment = Map.Map Ident Location
+data IdentInfo = Info Location Type Depth
+    deriving(Eq, Ord, Show, Read)
+
+type Environment = Map.Map Ident IdentInfo
 
 -- Definicja początkowo pustego środowiska programu.
 initialEnvironment :: Environment
@@ -57,15 +82,25 @@ initialEnvironment = Map.empty
 
 -- Struktura przechowująca aktualny stan programu.
 data ProgramState = ProgramState { 
+    depth :: Depth,
     store :: Store, 
     freeLocations :: [Location], 
     environment :: Environment }
+
+
+-- Funkcja zwracająca aktualną głębokość programu.
+getDepth :: InterpretMonad Depth
+getDepth = gets depth
+
+-- Funkcja ustalająca aktualną głębokość programu na zadaną argumentem.
+putDepth :: Depth -> InterpretMonad ()
+putDepth depth = modify $ \r -> 
+    r { depth }
 
 -- Funkcja zwracająca aktualną pamięć programu.
 getStore :: InterpretMonad Store  
 getStore = gets store
 
--- TODO lista lokacji ???
 -- Funkcja zwracająca aktualne wolne lokacje programu.
 getFreeLocations :: InterpretMonad [Location]
 getFreeLocations = gets freeLocations
@@ -75,7 +110,7 @@ getEnvironment :: InterpretMonad Environment
 getEnvironment = gets environment
 
 -- Początkowy pusty stan programu.
-initialState = ProgramState initialStore initialFreeLocations initialEnvironment
+initialState = ProgramState initialDepth initialStore initialFreeLocations initialEnvironment
 
 -- Monada służąca do interpretacji programu.
 type InterpretMonad a = StateT ProgramState (ExceptT String IO) a
@@ -135,30 +170,43 @@ modifyEnvironment f = do
     putEnvironment $ f environment
 
 -- Funkcja dokładająca do środowiska nowy identyfikator o zadanej lokacji.
-updateEnvironment :: Ident -> Location -> Environment -> Environment
-updateEnvironment ident location = Map.insert ident location
+updateEnvironment :: Ident -> IdentInfo -> Environment -> Environment
+updateEnvironment ident identInfo = Map.insert ident identInfo
 
 -- Funkcja zwracająca lokację zadanego identyfikatora.
-lookupEnvironment :: Ident -> Environment -> Maybe Location
+lookupEnvironment :: Ident -> Environment -> Maybe IdentInfo
 lookupEnvironment ident environment = do
     Map.lookup ident environment 
 
--- Funkcja zwracająca lokację, na którą wskazuje zadany identyfikator.
-getLocation :: Ident -> InterpretMonad Location
-getLocation ident =  do
+-- Funkcja może zwracająca informacje związane z identyfikatorem, na którą wskazuje zadany identyfikator.
+getMaybeIdentInfo :: Ident -> InterpretMonad (Maybe IdentInfo)
+getMaybeIdentInfo ident = do
     environment <- getEnvironment
-    case (lookupEnvironment ident environment) of
+    return $ lookupEnvironment ident environment
+
+-- Funkcja zwracająca informacje związane z identyfikatorem, na którą wskazuje zadany identyfikator, lub error jeśli nie istnieje.
+getIdentInfo :: Ident -> InterpretMonad IdentInfo
+getIdentInfo ident = do
+    maybeIdentInfo <- getMaybeIdentInfo ident
+    case maybeIdentInfo of
         Nothing -> let (Ident i) = ident in 
             throwError $ "`" ++ i ++ "` was not declared in this scope."
-        (Just location) -> return location
+        (Just identInfo) -> return identInfo
 
 -- Funkcja zwracająca obiekt, na który wskazuje zadany identyfikator.
 getObject :: Ident -> InterpretMonad Object
 getObject ident =  do
-    location <- getLocation ident
+    (Info location _ _) <- getIdentInfo ident
     store <- getStore 
     case (Map.lookup location store) of
         Nothing -> let (Ident i) = ident in 
             -- To nie może się zdarzyć.
             throwError $ "`" ++ i ++ "` was not allocated in this scope."
         (Just object) -> return object
+
+-- Funkcja dodająca pod zadany identyfikator nowy obiekt na zadanej głębokości.
+putNew :: Ident -> Type -> Depth -> Object -> InterpretMonad ()
+putNew ident t depth object = do
+    location <- alloc
+    modifyEnvironment (updateEnvironment ident (Info location t depth))
+    updateStore location object
