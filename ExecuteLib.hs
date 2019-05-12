@@ -164,10 +164,8 @@ updateArg :: Arg -> FunArgVal -> InterpretMonad ()
 
 -- Dodanie argumentu funkcji przed jej uruchomieniem do środowiska/pamięci w którym będzie działać.
 updateArg (ValueArg t ident) (FunArgValue value) = do
-    location <- alloc
     depth <- getDepth
-    modifyEnvironment (updateEnvironment ident (Info location t depth))
-    updateStore location (ObjectValue value)
+    putNew ident t depth (ObjectValue value)
 
 updateArg (RefArg t ident) (FunArgLocation location) = do
     depth <- getDepth
@@ -339,7 +337,7 @@ executeStmtDeclHelper t ident value = do
                 Nothing -> do
                     putNew ident t actualDepth (ObjectValue value)
         False -> let (Ident i) = ident in throwError $ "Cannot initialize `" ++ i ++ "` which is of " ++ show t ++ " type, with an expression of " ++ show valueType ++ " type."
-        
+
 -------------------------------------------------------------------------------------------
 -- Interpretery wyrażeń.
 -------------------------------------------------------------------------------------------
