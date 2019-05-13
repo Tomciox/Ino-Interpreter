@@ -2,11 +2,11 @@
 
 entrypoints Program ;
 
-ProgramS.  Program ::= [TopDef] ;
+ProgramS.  Program ::= [FunDef] ;
 
-FnDef.	   TopDef ::= Type Ident "(" [Arg] ")" Block ;
+FnDef.	   FunDef ::= Type Ident "(" [Arg] ")" Block ;
 
-separator nonempty TopDef "" ;
+separator nonempty FunDef "" ;
 
 ValueArg.  Arg ::= Type Ident;
 
@@ -33,6 +33,8 @@ Decl.      Stmt ::= Type [Item] ";" ;
 NoInit.    Item ::= Ident ; 
 
 Init.      Item ::= Ident "=" Expr ;
+
+FunDecl.   Stmt ::= FunDef ;
 
 InitArr.   Item ::= Ident "=" "new" Type "[" [Integer] "]" ;
 

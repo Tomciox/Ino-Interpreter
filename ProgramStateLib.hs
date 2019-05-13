@@ -44,9 +44,8 @@ getDefaultValue Bool = ValueBool False
 getDefaultValue Void = ValueVoid
 getDefaultValue Str = ValueString ""
 
--- TODO inne typy ???
 -- Definicja typu przechowywanego w pamięci stanu programu.
-data Object = ObjectValue Value | ObjectTopDef TopDef
+data Object = ObjectValue Value | ObjectFunDef FunDef Environment
     deriving(Eq, Ord, Show, Read)
 
 -- Definicja typu aktualnej głębokości drzewa interpretacji.
@@ -68,7 +67,7 @@ type Location = Int
 
 -- Definicja początkowo wolnych lokacji.
 initialFreeLocations :: [Location]
-initialFreeLocations = [1..100]
+initialFreeLocations = [1..30]
 
 -- Definicja typu środowiska programu.
 data IdentInfo = Info Location Type Depth
@@ -138,6 +137,11 @@ releaseLocations (location:locations) = do
     releaseLocation location
     releaseLocations locations
 
+releaseDifference :: Environment -> Environment -> InterpretMonad ()
+releaseDifference environmentBefore environmentAfter = do
+    let diff = Map.differenceWith (\ x y -> if x == y then Nothing else (Just x)) environmentAfter environmentBefore in do
+        releaseLocations $ map (\(Info l _ _) -> l) (Map.elems diff)
+
 -- Funkcja aktualizująca pamięć programu o nową wartość pod zadaną lokacją.
 updateStore :: Location -> Object -> InterpretMonad ()
 updateStore location object = modify $ \state -> 
@@ -153,7 +157,7 @@ alloc :: InterpretMonad Location
 alloc = do
     freeLocations <- getFreeLocations
     case freeLocations of
-        [] -> throwError $ "Memory error: no free locations."
+        [] -> throwError $ "Ino Exception: Memory error, no free locations left."
         (location:locations) -> do
             putFreeLocations locations
             return location
@@ -190,7 +194,7 @@ getIdentInfo ident = do
     maybeIdentInfo <- getMaybeIdentInfo ident
     case maybeIdentInfo of
         Nothing -> let (Ident i) = ident in 
-            throwError $ "`" ++ i ++ "` was not declared in this scope."
+            throwError $ "Ino Exception: `" ++ i ++ "` was not declared in this scope."
         (Just identInfo) -> return identInfo
 
 -- Funkcja zwracająca obiekt, na który wskazuje zadany identyfikator.
@@ -201,12 +205,25 @@ getObject ident =  do
     case (Map.lookup location store) of
         Nothing -> let (Ident i) = ident in 
             -- To nie może się zdarzyć.
-            throwError $ "`" ++ i ++ "` was not allocated in this scope."
+            throwError $ "Ino Exception: `" ++ i ++ "` was not allocated in this scope."
         (Just object) -> return object
 
--- Funkcja dodająca pod zadany identyfikator nowy obiekt na zadanej głębokości.
-putNew :: Ident -> Type -> Depth -> Object -> InterpretMonad ()
-putNew ident t depth object = do
+putObject :: Ident -> Type -> Depth -> Object -> InterpretMonad ()
+putObject ident t depth object = do
     location <- alloc
     modifyEnvironment (updateEnvironment ident (Info location t depth))
     updateStore location object
+
+-- Funkcja dodająca pod zadany identyfikator nowy obiekt na zadanej głębokości.
+declareObject :: Ident -> Type -> Object -> InterpretMonad ()
+declareObject ident t object = do
+    maybeIdentInfo <- getMaybeIdentInfo ident
+    actualDepth <- getDepth
+
+    case maybeIdentInfo of
+        Nothing -> do
+            putObject ident t actualDepth object
+        (Just (Info _ _ declarationDepth)) -> do
+            case (declarationDepth < actualDepth) of
+                True -> putObject ident t actualDepth object
+                False -> let (Ident i) = ident in throwError $ "Ino Exception: Redeclaration of `" ++ i ++ "`."

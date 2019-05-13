@@ -24,6 +24,11 @@ import Control.Monad.Trans
 import Control.Monad.Identity
 import Data.Maybe(catMaybes)
 
+data ResultReturn = ResultUnit | ResultBreak | ResultContinue | ResultValue Value
+
+-- Typ wartości argumentu w trakcie parsowania. Jeśli jest przez wartość, to argument jest wyliczany, jeśli przez referencję, przekazywana jest lokacja.
+data FunArgVal = FunArgValue Value | FunArgLocation Location
+
 -------------------------------------------------------------------------------------------
 -- Interpretery programu.
 -------------------------------------------------------------------------------------------
@@ -34,85 +39,83 @@ executeProgram :: Program -> InterpretMonad ()
 executeProgram (ProgramS []) = do
     object <- getObject (Ident "main")
     case object of
-        (ObjectTopDef (FnDef Int _ [] _)) -> do
-            retVal <- executeFunction (Ident "main") []
-            case retVal of
-                -- TODO
-                (ValueInteger 0) -> return ()
-                (ValueInteger r) -> throwError $ "Program failed with exit code " ++ show r ++ "."
-        _ -> throwError $ "Main function is not defined."
+        (ObjectFunDef (FnDef Int _ [] _) environment) -> do
+            resultReturn <- executeFunction (Ident "main") []
+            case resultReturn of
+                ResultUnit -> throwError $ "Ino Exception: Main ended without return statement."
+                ResultBreak -> throwError $ "Ino Exception: Break statement without loop."
+                ResultContinue -> throwError $ "Ino Exception: Continue statement without loop."
+                ResultValue (ValueInteger 0) -> return ()
+                ResultValue (ValueInteger r) -> throwError $ "Ino Exception: Main failed with exit code " ++ show r ++ "."
+                _ -> throwError $ "Ino Exception: Main exit code is not of Int type."
+        _ -> throwError $ "Ino Exception: Main function is not defined."
 
 -- Funkcja interpretująca wykonanie niepustego programu.
 executeProgram (ProgramS (definition:definitions)) = do
-    depth <- getDepth
-    let (FnDef t ident _ _) = definition in putNew ident t depth (ObjectTopDef definition)
+    executeStmt (FunDecl definition)
     executeProgram (ProgramS definitions)
 
 -------------------------------------------------------------------------------------------
 -- Interpretery funkcji.
 -------------------------------------------------------------------------------------------
 
-executeFunction :: Ident -> [Expr] -> InterpretMonad Value
+executeFunction :: Ident -> [Expr] -> InterpretMonad ResultReturn
 
 -- Interpretacja wywołania funkcji. 
 executeFunction ident exprs = do
     case ident of
-        (Ident "printInt") -> case exprs of
+        (Ident "print") -> case exprs of
             [] -> do
-                return ValueVoid
+                return $ ResultValue ValueVoid
             (e:ex) -> do
-                val <- executeExpr e
-                case val of 
+                value <- executeExpr e
+                case value of 
                     (ValueInteger i) -> do
-                        liftIO $ putStr $ (show i ++ " ")
-                    _ -> throwError $ "Cannot printInt expression that is not of Int type."
-                executeFunction (Ident "printInt") ex
-        (Ident "printString") -> case exprs of
-            [] -> do
-                return ValueVoid
-            (e:ex) -> do
-                val <- executeExpr e
-                case val of 
+                        liftIO $ putStr $ show i
+                    (ValueBool b) -> do
+                        liftIO $ putStr $ show b
+                    (ValueVoid) -> do
+                        liftIO $ putStr "()"
                     (ValueString s) -> do
-                        liftIO $ putStr $ s
-                        return ValueVoid
-                    _ -> throwError $ "Cannot printString expression that is not of String type."
-                executeFunction (Ident "printString") ex
+                        liftIO $ putStr s
+                executeFunction (Ident "print") ex
         _ -> do
             object <- getObject ident
             case object of
-                (ObjectTopDef (FnDef t (Ident s) args (BlockS stmts))) -> do
-                    env <- getEnvironment
-                    depth <- getDepth
-                    putDepth (depth + 1)
-                    
-                    addArgs s args exprs
-
+                (ObjectFunDef (FnDef t (Ident s) args (BlockS stmts)) functionEnvironment) -> do
+                    -- Zapisanie aktualnego środowiska.
+                    backupEnvironment <- getEnvironment
+                    -- Zapisanie aktualnej głębokości.
+                    backupDepth <- getDepth
+                    -- Sparsowanie argumentów, w środowisku wywołania.
+                    parsedArgs <- parseArgs s args exprs
+                    -- Przejście do środowiska z miejsca deklaracji funkcji (statyczna widoczność identyfikatorów).
+                    putEnvironment functionEnvironment
+                    -- Przejście do bloku wywołania funkcji.
+                    putDepth (backupDepth + 1)
+                    -- Dodanie deklaracji wywoływanej funkcji do środowiska jej wywołania, umożliwienie rekurencyjnego wywołania.
+                    declareObject ident t object
+                    -- Zdeklarowanie argumentów w bloku wywołania funkcji.
+                    updateArgs args parsedArgs
+                    -- Wywołanie funkcji i zwolnienie zaalokowanej przez nią pamięci.
+                    environmentX <- getEnvironment
                     executeStmts stmts
-
+                    environmentY <- getEnvironment
+                    releaseDifference environmentX environmentY
+                    -- Zwolnienie pamięci zajmowanej przez argumenty wywołania funkcji.
                     releaseArgs args
+                    -- Zwolnienie pamięci zajmowanej przez definicję funkcji dodaną dla umożliwienia rekurencyjnego wywołania.
+                    (Info location _ _) <- getIdentInfo ident
+                    releaseLocation location
+                    -- Przywrócenie oryginalnego środowiska.
+                    putEnvironment backupEnvironment
+                    -- Przywrócenie oryginalnej głębokości.
+                    putDepth backupDepth
 
-                    putEnvironment env
-                    putDepth depth
-                    case t of
-                        -- TODO of course its a mock should return exact value
-                        Int -> return (ValueInteger 0)
-                        Str -> return (ValueString "")
-                        Bool -> return (ValueBool False)
-                        Void -> return ValueVoid
-                _ -> let (Ident i) = ident in throwError $ "Function `" ++ i ++ "` was not declared in this scope."
-
--- Typ wartości argumentu w trakcie parsowania. Jeśli jest przez wartość, to argument jest wyliczany, jeśli przez referencję, przekazywana jest lokacja.
-data FunArgVal = FunArgValue Value | FunArgLocation Location
-
-addArgs :: String -> [Arg] -> [Expr] -> InterpretMonad ()
-
--- Wylicznie i dodanie argumentów funkcji do środowiska/pamięci, przed jej uruchomieniem.
-addArgs s args exprs = do
-    parsedArgs <- parseArgs s args exprs
-    updateArgs args parsedArgs
-    return ()
-
+                    -- TODO mock default type
+                    return $ ResultValue $ getDefaultValue t
+                _ -> let (Ident i) = ident in throwError $ "Ino Exception: `" ++ i ++ "` is not a function."
+    
 parseArgs :: String -> [Arg] -> [Expr] -> InterpretMonad [FunArgVal]
 
 -- Wyliczenie wartości argumentów, przed uruchomieniem funkcji, w zależności od tego czy są przekazane przez wartość, czy referencję.
@@ -125,10 +128,10 @@ parseArgs s (arg:args) (expr:exprs) = do
     return (funArgVal:funArgVals)
 
 parseArgs s (arg:args) _ = do
-    throwError $ "Too few arguments of function " ++ s ++ "."
+    throwError $ "Ino Exception: Too few arguments of function " ++ s ++ "."
 
 parseArgs s _ (expr:exprs) = do
-    throwError $ "Too many arguments of function " ++ s ++ "."
+    throwError $ "Ino Exception: Too many arguments of function " ++ s ++ "."
 
 parseArg :: String -> Arg -> Expr -> InterpretMonad FunArgVal
 
@@ -137,7 +140,7 @@ parseArg s (ValueArg t ident) expr = do
     value <- executeExpr expr
     let exprT = getValueType value in case (t == exprT) of
         True -> return $ FunArgValue value
-        _ -> let (Ident i) = ident in throwError $ "Invalid type of one argument passed by value of function `" ++ s ++ "`."
+        _ -> let (Ident i) = ident in throwError $ "Ino Exception: Invalid type of one argument passed by value of function `" ++ s ++ "`."
 
 parseArg s (RefArg t ident) expr = do 
     case expr of 
@@ -146,8 +149,8 @@ parseArg s (RefArg t ident) expr = do
             case (t == passedIdentT) of
                 True -> do
                     return $ FunArgLocation location
-                _ -> throwError $ "Invalid type of one argument passed by reference of function `" ++ s ++ "`."
-        _ -> throwError $ "An argument of function `" ++ s ++ "` passed by reference is not an identifier."
+                _ -> throwError $ "Ino Exception: Invalid type of one argument passed by reference of function `" ++ s ++ "`."
+        _ -> throwError $ "Ino Exception: An argument of function `" ++ s ++ "` passed by reference is not an identifier."
 
 updateArgs :: [Arg] -> [FunArgVal] -> InterpretMonad ()
 
@@ -158,14 +161,12 @@ updateArgs [] [] = do
 updateArgs (arg:args) (funArgVal:funArgVals) = do
     updateArg arg funArgVal
     updateArgs args funArgVals
-    return ()
 
 updateArg :: Arg -> FunArgVal -> InterpretMonad ()
 
 -- Dodanie argumentu funkcji przed jej uruchomieniem do środowiska/pamięci w którym będzie działać.
 updateArg (ValueArg t ident) (FunArgValue value) = do
-    depth <- getDepth
-    putNew ident t depth (ObjectValue value)
+    declareObject ident t (ObjectValue value)
 
 updateArg (RefArg t ident) (FunArgLocation location) = do
     depth <- getDepth
@@ -184,34 +185,36 @@ releaseArgs (arg:args) = do
 releaseArg :: Arg -> InterpretMonad ()
 
 -- Zwolnienie argumentu funkcji po jej uruchomieniu ze środowiska/pamięci w którym działała.
-releaseArg (ValueArg t ident) = do
-    (Info location t depth) <- getIdentInfo ident
+releaseArg (ValueArg _ ident) = do
+    (Info location _ _) <- getIdentInfo ident
     releaseLocation location
 
 releaseArg (RefArg t ident) = do 
     return ()
 
-
 -------------------------------------------------------------------------------------------
 -- Interpretery bloku.
 -------------------------------------------------------------------------------------------
+
 
 executeBlock :: Block -> InterpretMonad ()
 
 -- Funkcja interpretująca wykonanie bloku.
 executeBlock (BlockS stmts) = do
-    env <- getEnvironment
+    -- Zapisanie aktualnego środowiska.
+    backupEnvironment <- getEnvironment
+    -- Zapisanie aktualnej głębokości.
     depth <- getDepth
+    -- Przejście do bloku.
     putDepth (depth + 1)
-
+    -- Wywołanie bloku.
     executeStmts stmts
-
-    blockEnv <- getEnvironment
-
-    let diff = Map.differenceWith (\ x y -> if x == y then Nothing else (Just y)) blockEnv env in 
-        releaseLocations $ map (\(Info l _ _) -> l) (Map.elems diff)
-
-    putEnvironment env
+    -- Zwolnienie pamięci zaalokowanej w bloku.
+    blockEnvironment <- getEnvironment
+    releaseDifference backupEnvironment blockEnvironment 
+    -- Przywrócenie oryginalnego środowiska.
+    putEnvironment backupEnvironment
+    -- Przywrócenie oryginalnej głębokości.
     putDepth depth
 
 -------------------------------------------------------------------------------------------
@@ -249,7 +252,7 @@ executeStmt (Ass ident exp) = do
     newValue <- executeExpr exp
     let newValueType = getValueType newValue in case (t == newValueType) of
         True -> updateStore location (ObjectValue newValue)
-        _ -> let (Ident i) = ident in throwError $ "Cannot assign to `" ++ i ++ "` which is of " ++ show t ++ " type, an expression of " ++ show newValueType ++ " type."
+        _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t ++ " type, an expression of " ++ show newValueType ++ " type."
 
 -- Funkcja interpretująca wykonanie statementu inkrementacji zmiennej.
 executeStmt (Incr ident) = do
@@ -258,7 +261,7 @@ executeStmt (Incr ident) = do
         Int -> do
             (ObjectValue (ValueInteger value)) <- getObject ident
             updateStore location (ObjectValue (ValueInteger (value + 1)))
-        _ -> let (Ident i) = ident in throwError $ "Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
+        _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
 
 -- Funkcja interpretująca wykonanie statementu dekrementacji zmiennej.
 executeStmt (Decr ident) = do
@@ -267,7 +270,7 @@ executeStmt (Decr ident) = do
         Int -> do
             (ObjectValue (ValueInteger value)) <- getObject ident
             updateStore location (ObjectValue (ValueInteger (value - 1)))
-        _ -> let (Ident i) = ident in throwError $ "Cannot decrement `" ++ i ++ "` which is of " ++ show t ++ " type."
+        _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot decrement `" ++ i ++ "` which is of " ++ show t ++ " type."
 
 -- Funkcja interpretująca wykonanie statementu warunku if bez else.
 executeStmt (Cond expr stmt) = do
@@ -275,7 +278,7 @@ executeStmt (Cond expr stmt) = do
     case val of
         (ValueBool True) -> executeBlock (BlockS [stmt])
         (ValueBool False) -> return ()
-        _ -> throwError $ "If expression is not of Bool type."
+        _ -> throwError $ "Ino Exception: If expression is not of Bool type."
 
 -- Funkcja interpretująca wykonanie statementu warunku if z else.
 executeStmt (CondElse expr stmt1 stmt2) = do
@@ -283,7 +286,7 @@ executeStmt (CondElse expr stmt1 stmt2) = do
     case val of
         (ValueBool True) -> executeBlock (BlockS [stmt1])
         (ValueBool False) -> executeBlock (BlockS [stmt2])
-        _ -> throwError $ "If expression is not of Bool type."
+        _ -> throwError $ "Ino Exception: If expression is not of Bool type."
 
 -- Funkcja interpretująca wykonanie statementu pętli while.
 executeStmt (While expr stmt) = do
@@ -293,12 +296,18 @@ executeStmt (While expr stmt) = do
             executeBlock (BlockS [stmt])
             executeStmt (While expr stmt)
         (ValueBool False) -> return ()
-        _ -> throwError $ "While expression is not of Bool type."
+        _ -> throwError $ "Ino Exception: While expression is not of Bool type."
 
 -- Funkcja interpretująca wykonanie statementu będącego wyrażniem.
 executeStmt (SExp expr) = do
-    executeExpr expr
+    -- TODO chceck this ???
+    value <- executeExpr expr
     return ()
+
+executeStmt (FunDecl definition) = do
+    environment <- getEnvironment
+    let (FnDef t ident _ _) = definition in 
+        declareObject ident t (ObjectFunDef definition environment)
 
 executeStmtDecls :: Type -> [Item] -> InterpretMonad ()
 
@@ -315,28 +324,14 @@ executeStmtDecl :: Type -> Item -> InterpretMonad ()
 
 -- Funkcja interpretująca deklarację obiektu bez jawnej inicjalizacji.
 executeStmtDecl t (NoInit ident) = do
-    executeStmtDeclHelper t ident (getDefaultValue t)
+    declareObject ident t (ObjectValue (getDefaultValue t))
 
 -- Funkcja interpretująca deklarację obiektu z inicjalizacją.
 executeStmtDecl t (Init ident expr) = do
     value <- executeExpr expr 
-    executeStmtDeclHelper t ident value
-
--- Funkcja pomocnicza dodająca do środowiska i pamięci nową zmienną o zadanym typie i wartości.
-executeStmtDeclHelper :: Type -> Ident -> Value -> InterpretMonad ()
-executeStmtDeclHelper t ident value = do
     let valueType = getValueType value in case (t == valueType) of
-        True -> do
-            maybeIdentInfo <- getMaybeIdentInfo ident
-            actualDepth <- getDepth
-            case maybeIdentInfo of
-                (Just (Info location _ depth)) -> do 
-                    case (depth < actualDepth) of
-                        True -> putNew ident t actualDepth (ObjectValue value)
-                        False -> let (Ident i) = ident in throwError $ "Redeclaration of `" ++ i ++ "`."
-                Nothing -> do
-                    putNew ident t actualDepth (ObjectValue value)
-        False -> let (Ident i) = ident in throwError $ "Cannot initialize `" ++ i ++ "` which is of " ++ show t ++ " type, with an expression of " ++ show valueType ++ " type."
+        True -> declareObject ident t (ObjectValue value)
+        False -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot initialize `" ++ i ++ "` which is of " ++ show t ++ " type, with an expression of " ++ show valueType ++ " type."
 
 -------------------------------------------------------------------------------------------
 -- Interpretery wyrażeń.
@@ -352,6 +347,7 @@ executeExpr (EVar ident) = do
     value <- getObject ident
     case value of
         (ObjectValue v) -> return $ v
+        _ -> throwError $ "Ino Exception: Function identifier is not an expression."
 
 -- Funkcja interpretująca sumę dwóch wyrażeń.
 executeExpr (EAdd exp1 op exp2) = do
@@ -361,7 +357,7 @@ executeExpr (EAdd exp1 op exp2) = do
         (ValueInteger i1, ValueInteger i2) -> case op of
             Plus -> return $ ValueInteger (i1 + i2)
             Minus -> return $ ValueInteger (i1 - i2)
-        _ -> throwError $ "Cannot apply any ADD operation on expressions of different types than Int."
+        _ -> throwError $ "Ino Exception: Cannot apply any ADD operation on expressions of different types than Int."
 
 -- Funkcja interpretująca iloczyn dwóch wyrażeń.
 executeExpr (EMul exp1 op exp2) = do
@@ -370,9 +366,13 @@ executeExpr (EMul exp1 op exp2) = do
     case (val1, val2) of
         (ValueInteger i1, ValueInteger i2) -> case op of
             Times -> return $ ValueInteger (i1 * i2)
-            Div -> return $ ValueInteger (i1 `div` i2)
-            Mod -> return $ ValueInteger (i1 `mod` i2)
-        _ -> throwError $ "Cannot apply any MUL operation on expressions of different types than Int."
+            Div -> case i2 of
+                0 -> throwError $ "Ino Exception: Division by zero."
+                _ -> return $ ValueInteger (i1 `div` i2)
+            Mod -> case i2 of
+                0 -> throwError $ "Ino Exception: Modulo by zero."
+                _ -> return $ ValueInteger (i1 `mod` i2)
+        _ -> throwError $ "Ino Exception: Cannot apply any MUL operation on expressions of different types than Int."
 
 -- Funkcja interpretująca porównanie dwóch wyrażeń.
 executeExpr (ERel exp1 op exp2) = do
@@ -386,7 +386,7 @@ executeExpr (ERel exp1 op exp2) = do
             GE -> return $ ValueBool (i1 >= i2)
             EQU -> return $ ValueBool (i1 == i2)
             NE -> return $ ValueBool (i1 /= i2)
-        _ -> throwError $ "Cannot apply any RELATION operation on expressions of different types than Int."
+        _ -> throwError $ "Ino Exception: Cannot apply any RELATION operation on expressions of different types than Int."
 
 -- Funkcja interpretująca sumę logiczną dwóch wyrażeń.
 executeExpr (EAnd exp1 exp2) = do
@@ -394,7 +394,7 @@ executeExpr (EAnd exp1 exp2) = do
     val2 <- executeExpr exp2
     case (val1, val2) of
         (ValueBool i1, ValueBool i2) -> return $ ValueBool (i1 && i2)
-        _ -> throwError $ "Cannot apply AND operation to expressions of different types than Bool."
+        _ -> throwError $ "Ino Exception: Cannot apply AND operation to expressions of different types than Bool."
 
 -- Funkcja interpretująca alternatywę logiczną dwóch wyrażeń.
 executeExpr (EOr exp1 exp2) = do
@@ -402,21 +402,21 @@ executeExpr (EOr exp1 exp2) = do
     val2 <- executeExpr exp2
     case (val1, val2) of
         (ValueBool i1, ValueBool i2) -> return $ ValueBool (i1 || i2)
-        _ -> throwError $ "Cannot apply OR operation to expressions of different types than Bool."
+        _ -> throwError $ "Ino Exception: Cannot apply OR operation to expressions of different types than Bool."
 
 -- Funkcja interpretująca wyrażenie przeciwne.
 executeExpr (Neg exp) = do
     val <- executeExpr exp
     case val of
         ValueInteger i -> return $ ValueInteger (negate i)
-        _ -> throwError $ "Cannot apply NEG to expression which is not of Int type."
+        _ -> throwError $ "Ino Exception: Cannot apply NEG to expression which is not of Int type."
 
 -- Funkcja interpretująca negację wyrażenia.
 executeExpr (Not exp) = do
     val <- executeExpr exp
     case val of
         ValueBool i -> return $ ValueBool (not i)
-        _ -> throwError $ "Cannot apply NOT to expression which is not of Bool type."
+        _ -> throwError $ "Ino Exception: Cannot apply NOT to expression which is not of Bool type."
     
 -- Funkcja interpretująca literał "prawda".
 executeExpr (ELitTrue) = do
@@ -428,7 +428,12 @@ executeExpr (ELitFalse) = do
 
 -- Funkcja interpretująca aplikację funkcji do wyrażeń.
 executeExpr (EApp i exprs) = do
-    executeFunction i exprs
+    resultReturn <- executeFunction i exprs
+    case resultReturn of
+        ResultUnit -> throwError $ "Ino Exception: Function ended without return statement."
+        ResultBreak -> throwError $ "Ino Exception: Break statement without loop."
+        ResultContinue -> throwError $ "Ino Exception: Continue statement without loop."
+        ResultValue r -> return r
 
 -- Funkcja interpretująca ciąg znaków.
 executeExpr (EString s) = do
