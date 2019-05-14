@@ -1,24 +1,20 @@
 // Funkcje z parametrami przez wartość, rekurencja
-
-void printSequence(int i) {
-	if (i > 0) {
-		printInt(i) ;
-		i-- ;
-		printSequence(i) ;
+void printSequence(int x) {
+	if (x > 0) {
+		print(x, " ");
+		x--;
+		printSequence(x);
 	}
+	return;
 }
 
-int main () {
-	int x1 = 10 ;
-	printString("x1 = ") ;
-	printInt(x1) ;
-	printString("\n\n") ;
+int main() {
+	int x = 10;
+	print("x = ", x, "\n");
 
-	printSequence(x1) ;
+	printSequence(x);
 
 	// zmienna nie została zmieniona
-	printString("\n\n") ;	
-	printString("x1 = ") ;
-	printInt(x1) ;
-	printString("\n\n") ;	
+	print("\n", "x = ", x, "\n");	
+	return 0;
 }

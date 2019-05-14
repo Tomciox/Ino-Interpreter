@@ -25,7 +25,8 @@ runProgram program = do
     result <- runInterpretMonad (executeProgram program) initialState
     case result of
         Left error -> do
-            putStrLn error
+            putStrLn $ "\n" ++ error
         Right (_, state) -> do
-            print $ Map.toAscList (environment state)
-            print $ Map.toAscList (store state)
+            -- print $ Map.toAscList (environment state)
+            -- print $ Map.toAscList (store state)
+           putStrLn "\nIno interpretation succeeded."

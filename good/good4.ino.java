@@ -1,27 +1,21 @@
-int main () {
-	// argumenty przekazywane do funkcji przez wartość lub referencję
-	int x = 2222, y = 3333 ;
-	printString("x, y:\n") ;
-	printInt(x, y) ;
-	printString("\n") ;
-
-	f(x, y) ;
-
-	// pierwszy argument ma oryginalną wartość, drugi zmienioną
-	printString("x, y:\n") ;
-	printInt(x, y) ;
-	printString("\n") ;
-}
+// argumenty przekazywane do funkcji przez wartość lub referencję
 
 void f (int a, int &b) {
-	printString("a, b:\n") ;
-	printInt(a, b) ;
-	printString("\n") ;
-
+	print("a = ", a, " b = ", b, "\n");
 	a = a * 2 ;
 	b = b * 3 ;
+	print("a = ", a, " b = ", b, "\n");
+	return;
+}
 
-	printString("a, b:\n") ;
-	printInt(a, b) ;
-	printString("\n") ;
+int main () {
+	int x = 2222, y = 3333;
+	print("x = ", x, " y = ", y, "\n");
+
+	f(x, y);
+
+	// pierwszy argument ma oryginalną wartość, drugi zmienioną
+	print("x = ", x, " y = ", y, "\n");
+	
+	return 0;
 }

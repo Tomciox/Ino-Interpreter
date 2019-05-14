@@ -1,5 +1,8 @@
-int main () {
-	int a = 1, b = 0 ;
+int main() {
+	int a = 1, b = 0;
+
 	// dzielenie przez zero
-	printInt(a / b) ;
+	print(a / b, "\n");
+
+	return 0;
 }

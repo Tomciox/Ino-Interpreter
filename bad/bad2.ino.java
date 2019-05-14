@@ -1,5 +1,6 @@
-int main () {
+int main() {
 	// brak nawiasu
-	if (true) {
-		printInt(1) ;
+	if(true) {
+		print(1);
+	return 0;
 }

@@ -1,24 +1,27 @@
 int main () {
-	// przesłanianie identyfikatorów ze statycznym ich wiązaniem
 	int x = 1;
-	printInt(x) ;
-	printString("\n") ;
-
+	print(x, "\n");
 	{
-		int x = 2;
-		printInt(x) ;
-		printString("\n") ;
-
+		// przysłonienie zmiennej wartością innego typu
+		string x = "Hello world!";
+		print(x, "\n");
 		{
-			int x = 3;
-			printInt(x) ;
-			printString("\n") ;
+			// przysłonięcie zmiennej funkcją, dowolnie zagnieżdżone definicje funkcji z zachowaniem poprawności statycznego wiązania identyfikatorów
+			void x() {
+				print("Funkcja\n");
+				return;
+			}
+			x();
+			{
+				// przysłonięcie funkcji zmienną
+				boolean x = true;
+				print(x, "\n");
+			}
+			x();
 		}
-
-		printInt(x) ;
-		printString("\n") ;
+		print(x, "\n");
 	}
+	print(x, "\n");
 
-	printInt(x) ;
-	printString("\n") ;
+	return 0;
 }

@@ -1,8 +1,10 @@
-int main () {
-	// nieistniejąca funkcja
-	funkcaj () ;
+void funkcja() {
+	return;
 }
 
-void funkcja () {
+int main() {
+	// nieistniejąca funkcja
+	funkcaj ();
 
+	return 0;
 }

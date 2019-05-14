@@ -47,7 +47,7 @@ executeProgram (ProgramS []) = do
                 ResultContinue -> throwError $ "Ino Exception: Continue statement without loop."
                 ResultValue (ValueInteger 0) -> return ()
                 ResultValue (ValueInteger r) -> throwError $ "Ino Exception: Main failed with exit code " ++ show r ++ "."
-                _ -> throwError $ "Ino Exception: Main exit code is not of Int type."
+                _ -> throwError $ "Ino Exception: Main return value is not of Int type."
         _ -> throwError $ "Ino Exception: Main function is not defined."
 
 -- Funkcja interpretująca wykonanie niepustego programu.
@@ -99,7 +99,7 @@ executeFunction ident exprs = do
                     updateArgs args parsedArgs
                     -- Wywołanie funkcji i zwolnienie zaalokowanej przez nią pamięci.
                     environmentX <- getEnvironment
-                    executeStmts stmts
+                    resultReturn <- executeStmts stmts
                     environmentY <- getEnvironment
                     releaseDifference environmentX environmentY
                     -- Zwolnienie pamięci zajmowanej przez argumenty wywołania funkcji.
@@ -112,8 +112,13 @@ executeFunction ident exprs = do
                     -- Przywrócenie oryginalnej głębokości.
                     putDepth backupDepth
 
-                    -- TODO mock default type
-                    return $ ResultValue $ getDefaultValue t
+                    case resultReturn of
+                        ResultUnit -> throwError $ "Ino Exception: Function `" ++ s ++ "` ended without return statement."
+                        ResultBreak -> throwError $ "Ino Exception: Break statement without loop."
+                        ResultContinue -> throwError $ "Ino Exception: Continue statement without loop."
+                        ResultValue value -> case (t == getValueType value) of
+                            True -> return resultReturn
+                            False -> throwError $ "Ino Exception: `" ++ s ++ "` return value is not of " ++ show t ++ " type."
                 _ -> let (Ident i) = ident in throwError $ "Ino Exception: `" ++ i ++ "` is not a function."
     
 parseArgs :: String -> [Arg] -> [Expr] -> InterpretMonad [FunArgVal]
@@ -197,7 +202,7 @@ releaseArg (RefArg t ident) = do
 -------------------------------------------------------------------------------------------
 
 
-executeBlock :: Block -> InterpretMonad ()
+executeBlock :: Block -> InterpretMonad ResultReturn
 
 -- Funkcja interpretująca wykonanie bloku.
 executeBlock (BlockS stmts) = do
@@ -208,7 +213,7 @@ executeBlock (BlockS stmts) = do
     -- Przejście do bloku.
     putDepth (depth + 1)
     -- Wywołanie bloku.
-    executeStmts stmts
+    resultReturn <- executeStmts stmts
     -- Zwolnienie pamięci zaalokowanej w bloku.
     blockEnvironment <- getEnvironment
     releaseDifference backupEnvironment blockEnvironment 
@@ -217,26 +222,30 @@ executeBlock (BlockS stmts) = do
     -- Przywrócenie oryginalnej głębokości.
     putDepth depth
 
+    return resultReturn
+
 -------------------------------------------------------------------------------------------
 -- Interpretery statementów.
 -------------------------------------------------------------------------------------------
 
-executeStmts :: [Stmt] -> InterpretMonad ()
+executeStmts :: [Stmt] -> InterpretMonad ResultReturn
 
 -- Funkcja interpretująca wykonanie pustej statementów.
 executeStmts [] = do
-    return ()
+    return ResultUnit
 
 -- Funkcja interpretująca wykonanie niepustej statementów.
 executeStmts (stmt:rest) = do
-    executeStmt stmt
-    executeStmts rest 
+    resultReturn <- executeStmt stmt
+    case resultReturn of
+        ResultUnit -> executeStmts rest 
+        _ -> return resultReturn
 
-executeStmt :: Stmt -> InterpretMonad ()
+executeStmt :: Stmt -> InterpretMonad ResultReturn
 
 -- Funkcja interpretująca wykonanie pustego statementu.
 executeStmt (Empty) = do
-    return ()
+    return ResultUnit
 
 -- Funkcja interpretująca wykonanie statementu będącego nowym blokiem.
 executeStmt (BStmt b) = do
@@ -245,6 +254,7 @@ executeStmt (BStmt b) = do
 -- Funkcja interpretująca wykonanie statementu deklaracji.
 executeStmt (Decl t declarations) = do
     executeStmtDecls t declarations
+    return ResultUnit
 
 -- Funkcja interpretująca wykonanie statementu przypisania.
 executeStmt (Ass ident exp) = do
@@ -253,6 +263,7 @@ executeStmt (Ass ident exp) = do
     let newValueType = getValueType newValue in case (t == newValueType) of
         True -> updateStore location (ObjectValue newValue)
         _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t ++ " type, an expression of " ++ show newValueType ++ " type."
+    return ResultUnit
 
 -- Funkcja interpretująca wykonanie statementu inkrementacji zmiennej.
 executeStmt (Incr ident) = do
@@ -262,6 +273,7 @@ executeStmt (Incr ident) = do
             (ObjectValue (ValueInteger value)) <- getObject ident
             updateStore location (ObjectValue (ValueInteger (value + 1)))
         _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
+    return ResultUnit
 
 -- Funkcja interpretująca wykonanie statementu dekrementacji zmiennej.
 executeStmt (Decr ident) = do
@@ -271,13 +283,14 @@ executeStmt (Decr ident) = do
             (ObjectValue (ValueInteger value)) <- getObject ident
             updateStore location (ObjectValue (ValueInteger (value - 1)))
         _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot decrement `" ++ i ++ "` which is of " ++ show t ++ " type."
+    return ResultUnit
 
 -- Funkcja interpretująca wykonanie statementu warunku if bez else.
 executeStmt (Cond expr stmt) = do
     val <- executeExpr expr
     case val of
         (ValueBool True) -> executeBlock (BlockS [stmt])
-        (ValueBool False) -> return ()
+        (ValueBool False) -> return ResultUnit
         _ -> throwError $ "Ino Exception: If expression is not of Bool type."
 
 -- Funkcja interpretująca wykonanie statementu warunku if z else.
@@ -293,21 +306,39 @@ executeStmt (While expr stmt) = do
     val <- executeExpr expr
     case val of
         (ValueBool True) -> do
-            executeBlock (BlockS [stmt])
-            executeStmt (While expr stmt)
-        (ValueBool False) -> return ()
+            resultReturn <- executeBlock (BlockS [stmt])
+            case resultReturn of
+                ResultContinue -> executeStmt (While expr stmt)
+                ResultUnit -> executeStmt (While expr stmt)
+                ResultBreak -> return ResultUnit
+                _ -> return resultReturn 
+        (ValueBool False) -> return ResultUnit
         _ -> throwError $ "Ino Exception: While expression is not of Bool type."
 
 -- Funkcja interpretująca wykonanie statementu będącego wyrażniem.
 executeStmt (SExp expr) = do
-    -- TODO chceck this ???
-    value <- executeExpr expr
-    return ()
+    executeExpr expr
+    return ResultUnit
 
 executeStmt (FunDecl definition) = do
     environment <- getEnvironment
-    let (FnDef t ident _ _) = definition in 
+    let (FnDef t ident _ _) = definition in do
         declareObject ident t (ObjectFunDef definition environment)
+        return ResultUnit
+
+executeStmt Break = 
+    return ResultBreak
+
+executeStmt Continue = 
+    return ResultContinue
+
+executeStmt (Ret expr) = do
+    value <- executeExpr expr
+    return $ ResultValue value
+
+executeStmt VRet = 
+    return $ ResultValue (ValueVoid)
+
 
 executeStmtDecls :: Type -> [Item] -> InterpretMonad ()
 

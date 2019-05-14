@@ -1,22 +1,28 @@
-int main () {
+int main() {
 	// arytmetyka
-	int x1 = 7, x2 = 3 ;
-	// jawne wypisywanie intów na wyjście
-	printInt(x1 + x2, x1 - x2, x1 / x2, x1 * x2, x1 % x2) ;
-	// jawne wypisywanie stringów na wyjście
-	printString("\n") ;
+	int x1 = 7, x2 = 3;
 
-	// else łączy się z najbliższym ifem
-	// brak wypisania
-	if (false)
-		if (true)
-			printString("If\n") ;
+	// jawne wypisywanie na wyjście
+	print(
+		x1, " + ", x2, " = ", x1 + x2, "\n", 
+		x1, " - ", x2, " = ", x1 - x2, "\n", 
+		x1, " / ", x2, " = ", x1 / x2, "\n",
+		x1, " * ", x2, " = ", x1 * x2, "\n",
+		x1, " % ", x2, " = ", x1 % x2, "\n");
+
+	// else łączy się z najbliższym ifem, brak wypisania
+	if(false)
+		if(true)
+			print("If\n");
 		else 
-			printString("Else\n") ;
+			print("Else\n");
+
 	// wypisanie "else"
-	if (true)
-		if (false)
-			printString("If\n") ;
+	if(true)
+		if(false)
+			print("If\n");
 		else 
-			printString("Else\n") ;
+			print("Else\n");
+
+	return 0;
 }

@@ -32,12 +32,12 @@ runFile v p f = readFile f >>= run v p
 
 run :: Verbosity -> ParseFun Program -> String -> IO ()
 run v p s = let ts = myLLexer s in case p ts of
-           Bad s    -> do putStrLn "\nParse              Failed...\n"
-                          putStrV v "Tokens:"
-                          putStrV v $ show ts
+           Bad s    -> do putStrLn "Parse Failed...\n"
+                          -- putStrV v "Tokens:"
+                          -- putStrV v $ show ts
                           putStrLn s
                           exitFailure
-           Ok  tree -> do putStrLn "\nParse Successful!"
+           Ok  tree -> do putStrLn "Parse Successful!\n"
                           runProgram tree
                           exitSuccess
 
