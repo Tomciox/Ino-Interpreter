@@ -20,8 +20,8 @@ import qualified Data.Map as Map
 -- Funkcja uruchamiajaca interpretację zadanego programu.
 -------------------------------------------------------------------------------------------
 
-runProgram :: Program -> IO ()
-runProgram program = do
+interpret :: Program -> IO ()
+interpret program = do
     result <- runInterpretMonad (executeProgram program) initialState
     case result of
         Left error -> do
