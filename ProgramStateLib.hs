@@ -5,8 +5,6 @@
 
 {-# LANGUAGE MultiParamTypeClasses, NamedFieldPuns#-}
 
--- Moduł zawierający zawierający definicje oraz funkcje pomocnicze do operacji na aktualnym stanie programu.
-
 module ProgramStateLib where 
 
 import LexIno
@@ -23,136 +21,144 @@ import Control.Monad.Identity
 import Data.Maybe(catMaybes)
 
 -------------------------------------------------------------------------------------------
--- Podstawowe definicje typów oraz ich początkowych konstruktorów i akcesorów.
+-- Typy używane przy interpretacji programu.
 -------------------------------------------------------------------------------------------
 
--- Typ danych wynikowych dla wyrażeń.
-data Value = ValueInteger Integer | ValueBool Bool | ValueVoid | ValueString String 
+-- Typ wyniku interpretaci statementu. Używany do kontrolowania przepływu sterowania programem. 
+data ResultReturn = ResultUnit | ResultBreak | ResultContinue | ResultValue Value
+
+-- Typ wartości argumentu funkcji w trakcie parsowania. 
+-- Jeśli argument jest przekazywany przez wartość, to jest wyliczany.
+-- Jeśli przez referencję, przekazywana jest jedynie lokacja.
+data FunArgVal = FunArgValue Value | FunArgLocation Location
+
+-- Typ wyniku interpretacji wyrażeń: Int, Bool, Void, String lub Tuple.
+data Value = ValueInteger Integer | ValueBool Bool | ValueVoid | ValueString String | ValueTuple [Value]
     deriving(Eq, Ord, Show, Read)
 
--- Funkcja zwracająca typ danej wartości.
+-- Zwrócenie typu zadanej wartości.
 getValueType :: Value -> Type
-getValueType (ValueInteger _) = Int
-getValueType (ValueBool _) = Bool
-getValueType ValueVoid = Void
-getValueType (ValueString _) = Str
+getValueType value = case value of
+    (ValueInteger _) -> Int
+    (ValueBool _) -> Bool
+    ValueVoid -> Void
+    (ValueString _) -> Str
+    (ValueTuple ts) -> Tuple (foldr (\t ts -> ((getValueType t):ts)) [] ts)
 
--- Funkcja zwracająca domyślna wartość zadanego typu.
+-- Zwrócenie domyślnej wartości zadanego typu.
 getDefaultValue :: Type -> Value
-getDefaultValue Int = ValueInteger 0
-getDefaultValue Bool = ValueBool False
-getDefaultValue Void = ValueVoid
-getDefaultValue Str = ValueString ""
+getDefaultValue t = case t of
+    Int -> ValueInteger 0
+    Bool -> ValueBool False
+    Void -> ValueVoid
+    Str -> ValueString ""
+    (Tuple ts) -> ValueTuple (foldr (\t ts -> ((getDefaultValue t):ts)) [] ts)
 
--- Definicja typu przechowywanego w pamięci stanu programu.
+-- Typ obiektu przechowywanego w pamięci stanu programu: wartość lub funkcja.
 data Object = ObjectValue Value | ObjectFunDef FunDef Environment
     deriving(Eq, Ord, Show, Read)
 
--- Definicja typu aktualnej głębokości drzewa interpretacji.
+-------------------------------------------------------------------------------------------
+-- Typy używane do przechowywania stanu interpretacji programu.
+-------------------------------------------------------------------------------------------
+
+-- Aktualnej głębokość drzewa interpretacji.
 type Depth = Int
 
--- Definicja początkowej głębokości drzewa.
+-- Definicja początkowej głębokości drzewa interpretacji.
 initialDepth :: Depth
 initialDepth = 0
 
--- Definicja typu pamięci programu.
+--  Pamięć programu.
 type Store = Map.Map Location Object
 
 -- Definicja początkowej pustej pamięci programu.
 initialStore :: Store
 initialStore = Map.empty
 
--- Definicja typu lokację w pamięci stanu programu.
+-- Lokacja w pamięci stanu programu.
 type Location = Int
 
 -- Definicja początkowo wolnych lokacji.
 initialFreeLocations :: [Location]
-initialFreeLocations = [1..30]
+initialFreeLocations = [1..10000]
 
--- Definicja typu środowiska programu.
+-- Informacje o obiekcie przechowywane w środowisku.
 data IdentInfo = Info Location Type Depth
     deriving(Eq, Ord, Show, Read)
 
+-- Środowisko zmiennych i funkcji programu.
 type Environment = Map.Map Ident IdentInfo
 
 -- Definicja początkowo pustego środowiska programu.
 initialEnvironment :: Environment
 initialEnvironment = Map.empty
 
--- Struktura przechowująca aktualny stan programu.
+-- Aktualny stan programu.
 data ProgramState = ProgramState { 
     depth :: Depth,
     store :: Store, 
     freeLocations :: [Location], 
     environment :: Environment }
 
-
--- Funkcja zwracająca aktualną głębokość programu.
+-- Zwrócenie aktualnej głębokości programu.
 getDepth :: InterpretMonad Depth
 getDepth = gets depth
 
--- Funkcja ustalająca aktualną głębokość programu na zadaną argumentem.
+-- Ustalenie aktualnej głębokości programu na zadaną argumentem.
 putDepth :: Depth -> InterpretMonad ()
-putDepth depth = modify $ \r -> 
-    r { depth }
+putDepth depth = modify $ \state -> 
+    state { depth }
 
--- Funkcja zwracająca aktualną pamięć programu.
+-- Zwrócenie aktualnej głębokości programu.
 getStore :: InterpretMonad Store  
 getStore = gets store
 
--- Funkcja zwracająca aktualne wolne lokacje programu.
-getFreeLocations :: InterpretMonad [Location]
-getFreeLocations = gets freeLocations
-
--- Funkcja zwracająca aktualne środowisko programu.
-getEnvironment :: InterpretMonad Environment
-getEnvironment = gets environment
-
--- Początkowy pusty stan programu.
-initialState = ProgramState initialDepth initialStore initialFreeLocations initialEnvironment
-
--- Monada służąca do interpretacji programu.
-type InterpretMonad a = StateT ProgramState (ExceptT String IO) a
-runInterpretMonad :: InterpretMonad a -> ProgramState -> IO (Either String (a, ProgramState))
-runInterpretMonad m state = runExceptT (runStateT m state)
-
--------------------------------------------------------------------------------------------
--- Funkcje pomocnicze.
--------------------------------------------------------------------------------------------
-
-releaseLocation :: Location -> InterpretMonad ()
-
--- Funkcja zwalniająca pamięć pod zadaną lokacją.
-releaseLocation location = do 
-    locations <- getFreeLocations
-    putFreeLocations (location:locations)
-
-releaseLocations :: [Location] -> InterpretMonad ()
-
--- Funkcja zwalniająca pamięć pod zadanymi lokacjami.
-releaseLocations [] = do
-    return ()
-
-releaseLocations (location:locations) = do
-    releaseLocation location
-    releaseLocations locations
-
-releaseDifference :: Environment -> Environment -> InterpretMonad ()
-releaseDifference environmentBefore environmentAfter = do
-    let diff = Map.differenceWith (\ x y -> if x == y then Nothing else (Just x)) environmentAfter environmentBefore in do
-        releaseLocations $ map (\(Info l _ _) -> l) (Map.elems diff)
-
--- Funkcja aktualizująca pamięć programu o nową wartość pod zadaną lokacją.
+-- Zaktualizowanie pamięci programu o nową wartość pod zadaną lokacją.
 updateStore :: Location -> Object -> InterpretMonad ()
 updateStore location object = modify $ \state -> 
     state { store = Map.insert location object (store state) }
 
--- Funkcja ustalająca aktualne wolne lokacje programu na zadane argumentem.
-putFreeLocations :: [Location] -> InterpretMonad ()
-putFreeLocations freeLocations = modify $ \r -> 
-    r { freeLocations }
+-- Zwrócenie listy wolnych lokacji.
+getFreeLocations :: InterpretMonad [Location]
+getFreeLocations = gets freeLocations
 
--- Funkcja zwracająca następną wolną lokację oraz usuwająca ją z listy wolnych lokacji programu.
+-- Ustalenie aktualnych wolnych lokacji programu na zadane argumentem.
+putFreeLocations :: [Location] -> InterpretMonad ()
+putFreeLocations freeLocations = modify $ \state -> 
+    state { freeLocations }
+
+-- Zwrócenie aktualnego środowiska programu.
+getEnvironment :: InterpretMonad Environment
+getEnvironment = gets environment
+
+-- Ustalenie aktualnego środowiska programu na zadane argumentem.
+putEnvironment :: Environment -> InterpretMonad ()
+putEnvironment environment = modify $ \state -> 
+    state { environment }
+
+-- Funkcja aktualizująca aktualne środowisko zadanym przekształceniem.
+updateEnvironment :: Ident -> IdentInfo -> InterpretMonad ()
+updateEnvironment ident info = modify $ \state -> 
+    state { environment = Map.insert ident info (environment state) }
+
+-- Początkowy pusty stan programu.
+initialState = ProgramState initialDepth initialStore initialFreeLocations initialEnvironment
+
+-------------------------------------------------------------------------------------------
+-- Monada służąca do interpretacji programu.
+-------------------------------------------------------------------------------------------
+
+type InterpretMonad a = StateT ProgramState (ExceptT String IO) a
+
+runInterpretMonad :: InterpretMonad a -> ProgramState -> IO (Either String (a, ProgramState))
+runInterpretMonad m state = runExceptT (runStateT m state)
+
+-------------------------------------------------------------------------------------------
+-- Funkcje pomocnicze do operacji na stanie programu.
+-------------------------------------------------------------------------------------------
+
+-- Zwrócenie następnej wolnej lokacji oraz usunięcie jej z listy dostępnych wolnych lokacji programu.
 alloc :: InterpretMonad Location
 alloc = do
     freeLocations <- getFreeLocations
@@ -162,33 +168,33 @@ alloc = do
             putFreeLocations locations
             return location
 
--- Funkcja ustalająca aktualne środowisko na zadane.
-putEnvironment :: Environment -> InterpretMonad ()
-putEnvironment environment = modify $ \r -> 
-    r { environment }
+-- Zwolnienie pamięci pod zadaną lokacją.
+releaseLocation :: Location -> InterpretMonad ()
+releaseLocation location = do 
+    locations <- getFreeLocations
+    putFreeLocations (location:locations)
 
--- Funkcja aktualizująca aktualne środowisko zadanym przekształceniem.
-modifyEnvironment :: (Environment -> Environment) -> InterpretMonad ()
-modifyEnvironment f = do
-    environment <- getEnvironment 
-    putEnvironment $ f environment
+-- Zwolnienie pamięci pod zadanymi lokacjami
+releaseLocations :: [Location] -> InterpretMonad ()
+releaseLocations ls = case ls of
+    [] -> return ()
+    (location:locations) -> do
+        releaseLocation location
+        releaseLocations locations
 
--- Funkcja dokładająca do środowiska nowy identyfikator o zadanej lokacji.
-updateEnvironment :: Ident -> IdentInfo -> Environment -> Environment
-updateEnvironment ident identInfo = Map.insert ident identInfo
+-- Zwolnienie lokacji używanych przez zmienne które się pojawiły w opuszczanym środowisku w stosunku do aktualnego.
+releaseDifference :: Environment -> Environment -> InterpretMonad ()
+releaseDifference environmentBefore environmentAfter = do
+    let diff = Map.differenceWith (\ x y -> if x == y then Nothing else (Just x)) environmentAfter environmentBefore in do
+        releaseLocations $ map (\(Info l _ _) -> l) (Map.elems diff)
 
--- Funkcja zwracająca lokację zadanego identyfikatora.
-lookupEnvironment :: Ident -> Environment -> Maybe IdentInfo
-lookupEnvironment ident environment = do
-    Map.lookup ident environment 
-
--- Funkcja może zwracająca informacje związane z identyfikatorem, na którą wskazuje zadany identyfikator.
+-- Zwrócenie informacji związanych z identyfikatorem, na które wskazuje zadany identyfikator.
 getMaybeIdentInfo :: Ident -> InterpretMonad (Maybe IdentInfo)
 getMaybeIdentInfo ident = do
     environment <- getEnvironment
-    return $ lookupEnvironment ident environment
+    return $ Map.lookup ident environment
 
--- Funkcja zwracająca informacje związane z identyfikatorem, na którą wskazuje zadany identyfikator, lub error jeśli nie istnieje.
+-- Zwrócenie informacji związanych z identyfikatorem, na które wskazuje zadany identyfikator.
 getIdentInfo :: Ident -> InterpretMonad IdentInfo
 getIdentInfo ident = do
     maybeIdentInfo <- getMaybeIdentInfo ident
@@ -197,29 +203,29 @@ getIdentInfo ident = do
             throwError $ "Ino Exception: `" ++ i ++ "` was not declared in this scope."
         (Just identInfo) -> return identInfo
 
--- Funkcja zwracająca obiekt, na który wskazuje zadany identyfikator.
+-- Zwrócenie obiektu na który wskazuje zadany identyfikator.
 getObject :: Ident -> InterpretMonad Object
 getObject ident =  do
     (Info location _ _) <- getIdentInfo ident
     store <- getStore 
     case (Map.lookup location store) of
         Nothing -> let (Ident i) = ident in 
-            -- To nie może się zdarzyć.
+            -- Nie istnieją niezaalokowane zmienne.
             throwError $ "Ino Exception: `" ++ i ++ "` was not allocated in this scope."
         (Just object) -> return object
 
+-- Dodanie nowego obiektu do środowiska oraz pamięci.
 putObject :: Ident -> Type -> Depth -> Object -> InterpretMonad ()
 putObject ident t depth object = do
     location <- alloc
-    modifyEnvironment (updateEnvironment ident (Info location t depth))
+    updateEnvironment ident (Info location t depth)
     updateStore location object
 
--- Funkcja dodająca pod zadany identyfikator nowy obiekt na zadanej głębokości.
+-- Deklaracja nowego obiektu o zadanym identyfikatorze.
 declareObject :: Ident -> Type -> Object -> InterpretMonad ()
 declareObject ident t object = do
     maybeIdentInfo <- getMaybeIdentInfo ident
     actualDepth <- getDepth
-
     case maybeIdentInfo of
         Nothing -> do
             putObject ident t actualDepth object

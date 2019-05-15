@@ -1,6 +1,6 @@
 all:
 	bnfc Ino.ebnf
-	happy -gca ParIno.y
+	happy -gcai ParIno.y
 	alex -g LexIno.x
 	ghc --make Interpreter.hs -o Interpreter
 

@@ -40,14 +40,17 @@ InitArr.   Item ::= Ident "=" "new" Type "[" [Integer] "]" ;
 
 separator nonempty Item "," ;
 
-Ass.        Stmt ::= Ident "=" Expr  ";" ;
-AssArrTupl. Stmt ::= Ident "[" [Integer] "]" "=" Expr  ";" ;
+Ass.       Stmt ::= Ident "=" Expr ";" ;
+
+-- AssArr.    Stmt ::= Ident "[" [Integer] "]" "=" Expr ";" ;
+
+AssTuple.  Stmt ::= "get" "<" [Integer] ">" "(" Ident ")" "=" Expr ";" ;
 
 separator  Integer "," ;
 
-Incr.      Stmt ::= Ident "++"  ";" ;
+Incr.      Stmt ::= Ident "++" ";" ;
 
-Decr.      Stmt ::= Ident "--"  ";" ;
+Decr.      Stmt ::= Ident "--" ";" ;
 
 Ret.       Stmt ::= "return" Expr ";" ;
 
@@ -73,31 +76,21 @@ Bool.      Type ::= "boolean" ;
 
 Void.      Type ::= "void" ;
 
-Array.	   Type ::= Type "[]" ;
-
 Tuple.     Type ::= "tuple" "<" [Type] ">" ;
 
-Fun. 	   Type ::= "(" [TypeA] ":" Type ")" ;
-
-TypeArg.   TypeA ::= Type ;
-
-TypeArgR.  TypeA ::= Type "&" ;
-
-separator  TypeA "," ;
-
 separator  Type "," ;
+
+Array.	   ArrType ::= Type "[" [Integer] "]" ;
 
 -- Expressions ---------------------------------------------
 
 EVar.      Expr6 ::= Ident ; 
 
-EArr.      Expr6 ::= Ident "[" [Integer] "]";
+-- EArrSubs.  Expr6 ::= Ident "[" [Integer] "]";
 
-EMakeTuple. Expr6 ::= "make_tuple" "<" [Type] ">" "(" [Expr] ")" ;
+ETupleSubs. Expr6 ::= "get" "<" [Integer] ">" "(" Ident ")" ;
 
-EMethod.   Expr6 ::= Ident "." Ident ;
-
-ELambda.   Expr6 ::= "lambda" "(" [Arg] ":" Type ")"  Stmt ;
+EMakeTuple. Expr6 ::= "make_tuple" "(" [Expr] ")" ;
 
 ELitInt.   Expr6 ::= Integer ;
 
