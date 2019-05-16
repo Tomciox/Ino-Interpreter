@@ -5,7 +5,7 @@
 
 {-# LANGUAGE MultiParamTypeClasses, NamedFieldPuns#-}
 
-module ProgramStateLib where 
+module InterpreterStateLib where 
 
 import LexIno
 import ParIno

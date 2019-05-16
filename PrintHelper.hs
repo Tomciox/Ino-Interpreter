@@ -5,7 +5,7 @@
 
 module PrintHelper where 
 
-import ProgramStateLib
+import InterpreterStateLib
 
 import LexIno
 import ParIno

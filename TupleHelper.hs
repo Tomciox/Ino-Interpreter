@@ -5,7 +5,7 @@
 
 module TupleHelper where
 
-import ProgramStateLib
+import InterpreterStateLib
 
 import LexIno
 import ParIno
