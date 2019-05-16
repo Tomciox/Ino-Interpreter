@@ -55,8 +55,7 @@ executeFunction :: Ident -> [Expr] -> InterpretMonad ResultReturn
 executeFunction ident exprs = do
     case ident of
         (Ident "print") -> case exprs of
-            [] -> do
-                return $ ResultValue ValueVoid
+            [] -> return $ ResultValue ValueVoid
             (e:ex) -> do
                 value <- executeExpr e 
                 printValue value 
@@ -110,7 +109,7 @@ executeFunction ident exprs = do
 -- Wyliczenie wartości argumentów, przed wywołaniem funkcji.
 parseArgs :: String -> [Arg] -> [Expr] -> InterpretMonad [FunArgVal]
 
-parseArgs s [] [] = do
+parseArgs s [] [] =
     return []
 
 parseArgs s (arg:args) (expr:exprs) = do
@@ -118,10 +117,10 @@ parseArgs s (arg:args) (expr:exprs) = do
     funArgVals <- parseArgs s args exprs
     return (funArgVal:funArgVals)
 
-parseArgs s (arg:args) [] = do
+parseArgs s (arg:args) [] =
     throwError $ "Ino Interpreter Exception: Too few arguments of function " ++ s ++ "."
 
-parseArgs s [] (expr:exprs) = do
+parseArgs s [] (expr:exprs) =
     throwError $ "Ino Interpreter Exception: Too many arguments of function " ++ s ++ "."
 
 -- Wyliczenie wartości jednego argumentu, przed uruchomieniem funkcji, w zależności od tego czy jest on przekazany przez wartość, czy referencję.
@@ -133,20 +132,19 @@ parseArg s (ValueArg t ident) expr = do
         True -> return $ FunArgValue value
         _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Invalid type of one argument passed by value, of function `" ++ s ++ "`."
 
-parseArg s (RefArg t ident) expr = do 
+parseArg s (RefArg t ident) expr =
     case expr of 
         (EVar passedIdent) -> do
             (Info location passedIdentT _) <- getIdentInfo passedIdent
             case (t == passedIdentT) of
-                True -> do
-                    return $ FunArgLocation location
+                True -> return $ FunArgLocation location
                 _ -> throwError $ "Ino Interpreter Exception: Invalid type of one argument passed by reference, of function `" ++ s ++ "`."
         _ -> throwError $ "Ino Interpreter Exception: An argument of function `" ++ s ++ "` passed by reference is not an identifier."
 
 -- Dodanie argumentów funkcji przed jej wywołaniem do środowiska/pamięci w którym będzie działać.
 updateArgs :: [Arg] -> [FunArgVal] -> InterpretMonad ()
 
-updateArgs [] [] = do
+updateArgs [] [] =
     return ()
 
 updateArgs (arg:args) (funArgVal:funArgVals) = do
@@ -156,7 +154,7 @@ updateArgs (arg:args) (funArgVal:funArgVals) = do
 -- Dodanie jednego argumentu funkcji przed jej uruchomieniem do środowiska/pamięci w którym będzie działać.
 updateArg :: Arg -> FunArgVal -> InterpretMonad ()
 
-updateArg (ValueArg t ident) (FunArgValue value) = do
+updateArg (ValueArg t ident) (FunArgValue value) =
     declareObject ident t (ObjectValue value)
 
 updateArg (RefArg t ident) (FunArgLocation location) = do
@@ -166,7 +164,7 @@ updateArg (RefArg t ident) (FunArgLocation location) = do
 -- Zwolnienie argumentów funkcji po jej uruchomieniu ze środowiska/pamięci w którym działała.
 releaseArgs :: [Arg] -> InterpretMonad ()
 
-releaseArgs [] = do
+releaseArgs [] =
     return ()
 
 releaseArgs (arg:args) = do
@@ -180,7 +178,7 @@ releaseArg (ValueArg _ ident) = do
     (Info location _ _) <- getIdentInfo ident
     releaseLocation location
 
-releaseArg (RefArg t ident) = do 
+releaseArg (RefArg t ident) =
     return ()
 
 -------------------------------------------------------------------------------------------
@@ -215,7 +213,7 @@ executeBlock (BlockS stmts) = do
 -- Funkcja interpretująca wykonanie listy statementów.
 executeStmts :: [Stmt] -> InterpretMonad ResultReturn
 
-executeStmts [] = do
+executeStmts [] =
     return ResultUnit
 
 executeStmts (stmt:rest) = do
@@ -227,7 +225,7 @@ executeStmts (stmt:rest) = do
 -- Funkcja interpretująca wykonanie pojedynczego statementu.
 executeStmt :: Stmt -> InterpretMonad ResultReturn
 
-executeStmt (Empty) = do
+executeStmt (Empty) =
     return ResultUnit
 
 executeStmt Break = 
@@ -236,7 +234,7 @@ executeStmt Break =
 executeStmt Continue = 
     return ResultContinue
     
-executeStmt (BStmt b) = do
+executeStmt (BStmt b) =
     executeBlock b
 
 executeStmt (Decl t declarations) = do
@@ -254,7 +252,6 @@ executeStmt (Ass ident exp) = do
     newValue <- executeExpr exp
     let newValueType = getValueType newValue in case (t == newValueType) of
         True -> updateStore location (ObjectValue newValue)
-        -- TODO assign to function bug ???
         _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t ++ " type, an expression of " ++ show newValueType ++ " type."
     return ResultUnit
 
@@ -263,9 +260,7 @@ executeStmt (AssTuple indices ident expr) = do
     case object of
         (ObjectValue (ValueTuple tuple)) -> do
             newValue <- executeExpr expr
-
             modifiedTuple <- assignTuple (ValueTuple tuple) indices newValue
-
             (Info location t _) <- getIdentInfo ident
             updateStore location (ObjectValue modifiedTuple)
             return ResultUnit
@@ -277,8 +272,8 @@ executeStmt (Incr ident) = do
         Int -> do
             (ObjectValue (ValueInteger value)) <- getObject ident
             updateStore location (ObjectValue (ValueInteger (value + 1)))
+            return ResultUnit
         _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
-    return ResultUnit
 
 executeStmt (Decr ident) = do
     (Info location t _) <- getIdentInfo ident
@@ -286,8 +281,8 @@ executeStmt (Decr ident) = do
         Int -> do
             (ObjectValue (ValueInteger value)) <- getObject ident
             updateStore location (ObjectValue (ValueInteger (value - 1)))
+            return ResultUnit
         _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Cannot decrement `" ++ i ++ "` which is of " ++ show t ++ " type."
-    return ResultUnit
 
 executeStmt (Ret expr) = do
     value <- executeExpr expr
@@ -334,7 +329,7 @@ executeStmt (SExp expr) = do
 -- Funkcja interpretująca deklarację listy zmiennych.
 executeStmtDecls :: Type -> [Item] -> InterpretMonad ()
 
-executeStmtDecls t [] = do
+executeStmtDecls t [] =
     return ()
 
 executeStmtDecls t (declaration:declarations) = do
@@ -344,7 +339,7 @@ executeStmtDecls t (declaration:declarations) = do
 -- Funkcja interpretująca deklarację pojedynczej zmiennej.
 executeStmtDecl :: Type -> Item -> InterpretMonad ()
 
-executeStmtDecl t (NoInit ident) = do
+executeStmtDecl t (NoInit ident) =
     declareObject ident t (ObjectValue (getDefaultValue t))
 
 executeStmtDecl t (Init ident expr) = do
@@ -360,7 +355,7 @@ executeStmtDecl t (Init ident expr) = do
 -- Funkcja interpretująca wartość listy wyrażeń.
 executeExprs :: [Expr] -> InterpretMonad [Value]
 
-executeExprs [] = do
+executeExprs [] =
     return []
 
 executeExprs (expr:exprs) = do
@@ -392,10 +387,10 @@ executeExpr (ETupleSubs indices ident) = do
         
 executeExpr (ELitInt value) = return $ ValueInteger value
 
-executeExpr (ELitTrue) = do
+executeExpr (ELitTrue) =
     return $ ValueBool True
 
-executeExpr (ELitFalse) = do
+executeExpr (ELitFalse) =
     return $ ValueBool False
 
 executeExpr (EApp i exprs) = do
@@ -406,7 +401,7 @@ executeExpr (EApp i exprs) = do
         ResultContinue -> throwError $ "Ino Interpreter Exception: Continue statement without loop."
         ResultValue r -> return r
 
-executeExpr (EString s) = do
+executeExpr (EString s) =
     return $ ValueString s
     
 executeExpr (Neg exp) = do

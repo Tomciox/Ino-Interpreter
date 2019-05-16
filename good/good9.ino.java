@@ -26,7 +26,6 @@ int main() {
 	tuple<int, tuple<int, string>> t4 = f(t3, make_tuple(make_tuple(10, "Ino"), false));
 	print("t4: ", t4, "\n");
 	print("t3: ", t3, "\n");
-
-
+	
 	return 0;
 }

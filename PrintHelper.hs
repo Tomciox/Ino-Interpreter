@@ -24,7 +24,7 @@ printValues :: [Value] -> InterpretMonad ()
 printValues [] = 
     return ()
 
-printValues (v:[]) = do
+printValues (v:[]) =
     printValue v
 
 printValues (v:vs) = do

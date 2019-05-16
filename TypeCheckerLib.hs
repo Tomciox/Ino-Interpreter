@@ -8,6 +8,7 @@
 module TypeCheckerLib where 
 
 import TypeCheckerStateLib
+import TupleHelper
 
 import LexIno
 import ParIno
@@ -27,7 +28,7 @@ import Control.Monad.Identity
 
 typeCheckProgram :: Program -> TypeCheckMonad ()
 
-typeCheckProgram (ProgramS []) = do
+typeCheckProgram (ProgramS []) =
     return ()
 
 typeCheckProgram (ProgramS (definition:definitions)) = do
@@ -66,7 +67,7 @@ typeCheckStmts (stmt:stmts) = do
 
 typeCheckStmt :: Stmt -> TypeCheckMonad ()
 
-typeCheckStmt Empty = do
+typeCheckStmt Empty =
     return ()
 
 typeCheckStmt Break = 
@@ -75,10 +76,10 @@ typeCheckStmt Break =
 typeCheckStmt Continue = 
     return ()
 
-typeCheckStmt (BStmt b) = do
+typeCheckStmt (BStmt b) =
     typeCheckBlock b
 
-typeCheckStmt (Decl t declarations) = do
+typeCheckStmt (Decl t declarations) =
     typeCheckStmtDecls t declarations
 
 typeCheckStmt (FunDecl definition) = 
@@ -98,7 +99,7 @@ typeCheckStmt (FunDecl definition) =
         putReturnType (Return t)
         putDepth (depth + 1)
 
-        parseArgs args
+        typeCheckParseArgs args
 
         typeCheckStmts stmts
 
@@ -111,23 +112,17 @@ typeCheckStmt (Ass ident exp) = do
     info <- getIdentInfo ident
     t <- typeCheckExpr exp
     case info of 
-        (VarInfo t2 _) -> case (t ==t2) of
+        (VarInfo t2 _) -> case (t == t2) of
             True -> return ()
             False -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t2 ++ " type, an expression of " ++ show t ++ " type."
-        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
+        _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
 
--- typeCheckStmt (AssTuple indices ident expr) = do
---     object <- getObject ident
---     case object of
---         (ObjectValue (ValueTuple tuple)) -> do
---             newValue <- executeExpr expr
-
---             modifiedTuple <- assignTuple (ValueTuple tuple) indices newValue
-
---             (Info location t _) <- getIdentInfo ident
---             updateStore location (ObjectValue modifiedTuple)
---             return ResultUnit
---         _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a tuple."
+typeCheckStmt (AssTuple indices ident expr) = do
+    info <- getIdentInfo ident
+    t <- typeCheckExpr expr
+    case info of
+        (VarInfo tuple _ ) -> typeCheckAssignTuple tuple indices t
+        _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a tuple."
 
 typeCheckStmt (Incr ident) = do
     info <- getIdentInfo ident
@@ -135,7 +130,7 @@ typeCheckStmt (Incr ident) = do
         (VarInfo t _) -> case t of
             Int -> return ()
             _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
-        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
+        _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
 
 typeCheckStmt (Decr ident) = do
     info <- getIdentInfo ident
@@ -143,7 +138,7 @@ typeCheckStmt (Decr ident) = do
         (VarInfo t _) -> case t of
             Int -> return ()
             _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
-        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
+        _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
 
 typeCheckStmt (Ret expr) = do
     (Return t) <- getReturnType
@@ -190,15 +185,15 @@ typeCheckStmt (SExp expr) = do
 -- Funkcje pomocnicze dla sprawdzania typów parsowania argumentów funkcji.
 -------------------------------------------------------------------------------------------
 
-parseArgs :: [Arg] -> TypeCheckMonad ()
-parseArgs [] = do
+typeCheckParseArgs :: [Arg] -> TypeCheckMonad ()
+typeCheckParseArgs [] =
     return ()
 
-parseArgs (arg:args) = do
+typeCheckParseArgs (arg:args) = do
     case arg of 
         (ValueArg t ident) -> putVarInfo ident t
         (RefArg t ident) -> putVarInfo ident t
-    parseArgs args
+    typeCheckParseArgs args
 
 -------------------------------------------------------------------------------------------
 -- Funkcje pomocnicze dla sprawdzania typów statementów deklaracji zmiennych.
@@ -206,7 +201,7 @@ parseArgs (arg:args) = do
 
 typeCheckStmtDecls :: Type -> [Item] -> TypeCheckMonad ()
 
-typeCheckStmtDecls t [] = do
+typeCheckStmtDecls t [] =
     return ()
 
 typeCheckStmtDecls t (declaration:declarations) = do
@@ -215,7 +210,7 @@ typeCheckStmtDecls t (declaration:declarations) = do
 
 typeCheckStmtDecl :: Type -> Item -> TypeCheckMonad ()
 
-typeCheckStmtDecl t (NoInit ident) = do
+typeCheckStmtDecl t (NoInit ident) =
     putVarInfo ident t
 
 typeCheckStmtDecl t (Init ident expr) = do
@@ -230,7 +225,7 @@ typeCheckStmtDecl t (Init ident expr) = do
 
 typeCheckExprs :: [Expr] -> TypeCheckMonad [Type]
 
-typeCheckExprs [] = do
+typeCheckExprs [] =
     return []
 
 typeCheckExprs (expr:exprs) = do
@@ -246,29 +241,27 @@ typeCheckExpr (EVar ident) = do
         (VarInfo t _) -> return t
         _ -> throwError $ "Ino TypeChecker Exception: Function identifier is not an expression."
 
--- typeCheckExpr (ETupleSubs indices ident) = do
---     object <- getObject ident
+typeCheckExpr (ETupleSubs indices ident) = do
+    info <- getIdentInfo ident
+    case info of
+        (VarInfo tuple _) ->
+            typeCheckGetTuple tuple indices
+        _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a tuple."
 
---     case object of
---         (ObjectValue (ValueTuple tuple)) -> do
---             subTuple <- getTuple (ValueTuple tuple) indices
+typeCheckExpr (EMakeTuple exprs) = do
+    ts <- typeCheckExprs exprs
+    return $ Tuple ts
 
---             return subTuple
---         _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a tuple."
-
--- typeCheckExpr (EMakeTuple exprs) = do
---     values <- typeCheckExprs exprs
---     return $ ValueTuple values
-
-typeCheckExpr (ELitInt _) = return Int
+typeCheckExpr (ELitInt _) =
+    return Int
 
 typeCheckExpr (ELitTrue) =
     return Bool
 
-typeCheckExpr (ELitFalse) =
+typeCheckExpr (ELitFalse) = 
     return Bool
 
-typeCheckExpr (EApp ident exprs) = do
+typeCheckExpr (EApp ident exprs) =
     case ident of
         (Ident "print") -> return Void
         _ -> do
@@ -276,10 +269,10 @@ typeCheckExpr (EApp ident exprs) = do
             let (Ident i) = ident in case identInfo of
                 (VarInfo _ _) -> throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a function." 
                 (FunInfo t ts _) -> do
-                    parseArgsApp i exprs ts
+                    typeCheckParseArgsApp i exprs ts
                     return t
 
-typeCheckExpr (EString _) = do
+typeCheckExpr (EString _) =
     return Str
 
 typeCheckExpr (Neg exp) = do
@@ -329,27 +322,23 @@ typeCheckExpr (EOr exp1 exp2) = do
         (Bool, Bool) -> return Int
         _ -> throwError $ "Ino TypeChecker Exception: Cannot apply OR operation to expressions of different types than Bool."
 
-    
-
-
-
 -------------------------------------------------------------------------------------------
 -- Funkcje pomocnicze do aplikacji.
 -------------------------------------------------------------------------------------------
 
-parseArgsApp :: String -> [Expr] -> [Type] -> TypeCheckMonad ()
-parseArgsApp _ [] [] = do
+typeCheckParseArgsApp :: String -> [Expr] -> [Type] -> TypeCheckMonad ()
+typeCheckParseArgsApp _ [] [] =
     return ()
 
-parseArgsApp s (expr:exprs) (t:ts) = do
+typeCheckParseArgsApp s (expr:exprs) (t:ts) = do
     t2 <- typeCheckExpr expr
     case (t == t2) of
         True -> return ()
         False -> throwError $ "Ino TypeChecker Exception: Invalid type of one argument, of function `" ++ s ++ "`."
-    parseArgsApp s exprs ts
+    typeCheckParseArgsApp s exprs ts
 
-parseArgsApp s [] ts = do
+typeCheckParseArgsApp s [] ts =
     throwError $ "Ino TypeChecker Exception: Too few arguments of function " ++ s ++ "."
 
-parseArgsApp s exprs [] = do
+typeCheckParseArgsApp s exprs [] =
     throwError $ "Ino TypeChecker Exception: Too many arguments of function " ++ s ++ "."

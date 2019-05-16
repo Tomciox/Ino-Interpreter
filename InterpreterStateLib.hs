@@ -183,8 +183,8 @@ releaseLocations ls = case ls of
 
 -- Zwolnienie lokacji używanych przez zmienne które się pojawiły w opuszczanym środowisku w stosunku do aktualnego.
 releaseDifference :: Environment -> Environment -> InterpretMonad ()
-releaseDifference environmentBefore environmentAfter = do
-    let diff = Map.differenceWith (\ x y -> if x == y then Nothing else (Just x)) environmentAfter environmentBefore in do
+releaseDifference environmentBefore environmentAfter =
+    let diff = Map.differenceWith (\ x y -> if x == y then Nothing else (Just x)) environmentAfter environmentBefore in
         releaseLocations $ map (\(Info l _ _) -> l) (Map.elems diff)
 
 -- Zwrócenie informacji związanych z identyfikatorem, na które wskazuje zadany identyfikator.
@@ -226,9 +226,8 @@ declareObject ident t object = do
     maybeIdentInfo <- getMaybeIdentInfo ident
     actualDepth <- getDepth
     case maybeIdentInfo of
-        Nothing -> do
-            putObject ident t actualDepth object
-        (Just (Info _ _ declarationDepth)) -> do
+        Nothing -> putObject ident t actualDepth object
+        (Just (Info _ _ declarationDepth)) ->
             case (declarationDepth < actualDepth) of
                 True -> putObject ident t actualDepth object
                 False -> let (Ident i) = ident in throwError $ "Ino Exception: Redeclaration of `" ++ i ++ "`."
