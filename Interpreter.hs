@@ -64,7 +64,7 @@ runProgram p s = let ts = myLLexer s in case p ts of
         exitFailure
     (Ok tree) -> do 
         putStrLn "Parse Successful!\n"
-        typeCheck tree
+        -- typeCheck tree
         interpret tree
         exitSuccess
 
