@@ -5,7 +5,7 @@
 
 {-# LANGUAGE MultiParamTypeClasses, NamedFieldPuns#-}
 
-module TypeCheckStateLib where 
+module TypeCheckerStateLib where 
 
 import LexIno
 import ParIno
@@ -18,7 +18,6 @@ import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Identity
-import Data.Maybe(catMaybes)
 
 -------------------------------------------------------------------------------------------
 -- Typy używane do przechowywania stanu sprawdzania typów programu.
@@ -133,10 +132,10 @@ putVarInfo ident t = do
     actualDepth <- getDepth
     case maybeIdentInfo of
         Nothing -> updateEnvironment ident (VarInfo t actualDepth)
-        (Just (VarInfo _ declarationDepth)) -> case (actualDepth < declarationDepth) of
+        (Just (VarInfo _ declarationDepth)) -> case (actualDepth > declarationDepth) of
             True -> updateEnvironment ident (VarInfo t actualDepth)
             False -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Redeclaration of `" ++ i ++ "`."
-        (Just (FunInfo _ _ declarationDepth)) -> case (actualDepth < declarationDepth) of
+        (Just (FunInfo _ _ declarationDepth)) -> case (actualDepth > declarationDepth) of
             True -> updateEnvironment ident (VarInfo t actualDepth)
             False -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Redeclaration of `" ++ i ++ "`."
 
@@ -147,10 +146,10 @@ putFunInfo ident t ts = do
     actualDepth <- getDepth
     case maybeIdentInfo of
         Nothing -> updateEnvironment ident (FunInfo t ts actualDepth)
-        (Just (VarInfo _ declarationDepth)) -> case (actualDepth < declarationDepth) of
+        (Just (VarInfo _ declarationDepth)) -> case (actualDepth > declarationDepth) of
             True -> updateEnvironment ident (FunInfo t ts actualDepth)
             False -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Redeclaration of `" ++ i ++ "`."
-        (Just (FunInfo _ _ declarationDepth)) -> case (actualDepth < declarationDepth) of
+        (Just (FunInfo _ _ declarationDepth)) -> case (actualDepth > declarationDepth) of
             True -> updateEnvironment ident (FunInfo t ts actualDepth)
             False -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Redeclaration of `" ++ i ++ "`."
     

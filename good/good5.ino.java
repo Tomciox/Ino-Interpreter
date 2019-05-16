@@ -12,6 +12,7 @@ int main () {
 				return;
 			}
 			x();
+			print(x);
 			{
 				// przysłonięcie funkcji zmienną
 				boolean x = true;

@@ -36,7 +36,7 @@ Init.      Item ::= Ident "=" Expr ;
 
 FunDecl.   Stmt ::= FunDef ;
 
-InitArr.   Item ::= Ident "=" "new" Type "[" [Integer] "]" ;
+-- InitArr.   Item ::= Ident "=" "new" Type "[" [Integer] "]" ;
 
 separator nonempty Item "," ;
 
@@ -62,8 +62,6 @@ CondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt  ;
 
 While.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
-For.	   Stmt ::= "for" "(" Type Ident "=" Expr ";" Expr ";" Expr ")" Stmt ;
-
 SExp.      Stmt ::= Expr  ";" ;
 
 -- Types ---------------------------------------------------
@@ -80,7 +78,7 @@ Tuple.     Type ::= "tuple" "<" [Type] ">" ;
 
 separator  Type "," ;
 
-Array.	   ArrType ::= Type "[" [Integer] "]" ;
+-- Array.	   ArrType ::= Type "[" [Integer] "]" ;
 
 -- Expressions ---------------------------------------------
 

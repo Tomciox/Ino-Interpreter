@@ -18,7 +18,6 @@ import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Identity
-import Data.Maybe(catMaybes)
 
 -------------------------------------------------------------------------------------------
 -- Typy używane przy interpretacji programu.

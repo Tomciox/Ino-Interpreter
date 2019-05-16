@@ -34,13 +34,13 @@ executeProgram (ProgramS []) = do
         (ObjectFunDef (FnDef Int _ [] _) environment) -> do
             resultReturn <- executeFunction (Ident "main") []
             case resultReturn of
-                ResultUnit -> throwError $ "Ino Exception: Main ended without return statement."
-                ResultBreak -> throwError $ "Ino Exception: Break statement without loop."
-                ResultContinue -> throwError $ "Ino Exception: Continue statement without loop."
+                ResultUnit -> throwError $ "Ino Interpreter Exception: Main ended without return statement."
+                ResultBreak -> throwError $ "Ino Interpreter Exception: Break statement without loop."
+                ResultContinue -> throwError $ "Ino Interpreter Exception: Continue statement without loop."
                 ResultValue (ValueInteger 0) -> return ()
-                ResultValue (ValueInteger r) -> throwError $ "Ino Exception: Main failed with exit code " ++ show r ++ "."
-                _ -> throwError $ "Ino Exception: Main return value is not of Int type."
-        _ -> throwError $ "Ino Exception: Main function is not defined."
+                ResultValue (ValueInteger r) -> throwError $ "Ino Interpreter Exception: Main failed with exit code " ++ show r ++ "."
+                _ -> throwError $ "Ino Interpreter Exception: Main return value is not of Int type."
+        _ -> throwError $ "Ino Interpreter Exception: Main function is not defined."
 
 executeProgram (ProgramS (definition:definitions)) = do
     executeStmt (FunDecl definition)
@@ -95,13 +95,13 @@ executeFunction ident exprs = do
                     putDepth backupDepth
 
                     case resultReturn of
-                        ResultUnit -> throwError $ "Ino Exception: Function `" ++ s ++ "` ended without return statement."
-                        ResultBreak -> throwError $ "Ino Exception: Break statement without loop."
-                        ResultContinue -> throwError $ "Ino Exception: Continue statement without loop."
+                        ResultUnit -> throwError $ "Ino Interpreter Exception: Function `" ++ s ++ "` ended without return statement."
+                        ResultBreak -> throwError $ "Ino Interpreter Exception: Break statement without loop."
+                        ResultContinue -> throwError $ "Ino Interpreter Exception: Continue statement without loop."
                         ResultValue value -> case (t == getValueType value) of
                             True -> return resultReturn
-                            False -> throwError $ "Ino Exception: `" ++ s ++ "` return value is not of " ++ show t ++ " type."
-                _ -> let (Ident i) = ident in throwError $ "Ino Exception: `" ++ i ++ "` is not a function."
+                            False -> throwError $ "Ino Interpreter Exception: `" ++ s ++ "` return value is not of " ++ show t ++ " type."
+                _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: `" ++ i ++ "` is not a function."
     
 -------------------------------------------------------------------------------------------
 -- Funkcje pomocnicze dla `executeFunction`.
@@ -119,10 +119,10 @@ parseArgs s (arg:args) (expr:exprs) = do
     return (funArgVal:funArgVals)
 
 parseArgs s (arg:args) [] = do
-    throwError $ "Ino Exception: Too few arguments of function " ++ s ++ "."
+    throwError $ "Ino Interpreter Exception: Too few arguments of function " ++ s ++ "."
 
 parseArgs s [] (expr:exprs) = do
-    throwError $ "Ino Exception: Too many arguments of function " ++ s ++ "."
+    throwError $ "Ino Interpreter Exception: Too many arguments of function " ++ s ++ "."
 
 -- Wyliczenie wartości jednego argumentu, przed uruchomieniem funkcji, w zależności od tego czy jest on przekazany przez wartość, czy referencję.
 parseArg :: String -> Arg -> Expr -> InterpretMonad FunArgVal
@@ -131,7 +131,7 @@ parseArg s (ValueArg t ident) expr = do
     value <- executeExpr expr
     let exprT = getValueType value in case (t == exprT) of
         True -> return $ FunArgValue value
-        _ -> let (Ident i) = ident in throwError $ "Ino Exception: Invalid type of one argument passed by value, of function `" ++ s ++ "`."
+        _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Invalid type of one argument passed by value, of function `" ++ s ++ "`."
 
 parseArg s (RefArg t ident) expr = do 
     case expr of 
@@ -140,8 +140,8 @@ parseArg s (RefArg t ident) expr = do
             case (t == passedIdentT) of
                 True -> do
                     return $ FunArgLocation location
-                _ -> throwError $ "Ino Exception: Invalid type of one argument passed by reference, of function `" ++ s ++ "`."
-        _ -> throwError $ "Ino Exception: An argument of function `" ++ s ++ "` passed by reference is not an identifier."
+                _ -> throwError $ "Ino Interpreter Exception: Invalid type of one argument passed by reference, of function `" ++ s ++ "`."
+        _ -> throwError $ "Ino Interpreter Exception: An argument of function `" ++ s ++ "` passed by reference is not an identifier."
 
 -- Dodanie argumentów funkcji przed jej wywołaniem do środowiska/pamięci w którym będzie działać.
 updateArgs :: [Arg] -> [FunArgVal] -> InterpretMonad ()
@@ -255,7 +255,7 @@ executeStmt (Ass ident exp) = do
     let newValueType = getValueType newValue in case (t == newValueType) of
         True -> updateStore location (ObjectValue newValue)
         -- TODO assign to function bug ???
-        _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t ++ " type, an expression of " ++ show newValueType ++ " type."
+        _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t ++ " type, an expression of " ++ show newValueType ++ " type."
     return ResultUnit
 
 executeStmt (AssTuple indices ident expr) = do
@@ -269,7 +269,7 @@ executeStmt (AssTuple indices ident expr) = do
             (Info location t _) <- getIdentInfo ident
             updateStore location (ObjectValue modifiedTuple)
             return ResultUnit
-        _ -> let (Ident i) = ident in throwError $ "Ino Exception: `" ++ i ++ "` is not a tuple."
+        _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: `" ++ i ++ "` is not a tuple."
 
 executeStmt (Incr ident) = do
     (Info location t _) <- getIdentInfo ident
@@ -277,7 +277,7 @@ executeStmt (Incr ident) = do
         Int -> do
             (ObjectValue (ValueInteger value)) <- getObject ident
             updateStore location (ObjectValue (ValueInteger (value + 1)))
-        _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
+        _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
     return ResultUnit
 
 executeStmt (Decr ident) = do
@@ -286,7 +286,7 @@ executeStmt (Decr ident) = do
         Int -> do
             (ObjectValue (ValueInteger value)) <- getObject ident
             updateStore location (ObjectValue (ValueInteger (value - 1)))
-        _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot decrement `" ++ i ++ "` which is of " ++ show t ++ " type."
+        _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Cannot decrement `" ++ i ++ "` which is of " ++ show t ++ " type."
     return ResultUnit
 
 executeStmt (Ret expr) = do
@@ -301,14 +301,14 @@ executeStmt (Cond expr stmt) = do
     case val of
         (ValueBool True) -> executeBlock (BlockS [stmt])
         (ValueBool False) -> return ResultUnit
-        _ -> throwError $ "Ino Exception: If expression is not of Bool type."
+        _ -> throwError $ "Ino Interpreter Exception: If expression is not of Bool type."
 
 executeStmt (CondElse expr stmt1 stmt2) = do
     val <- executeExpr expr
     case val of
         (ValueBool True) -> executeBlock (BlockS [stmt1])
         (ValueBool False) -> executeBlock (BlockS [stmt2])
-        _ -> throwError $ "Ino Exception: If expression is not of Bool type."
+        _ -> throwError $ "Ino Interpreter Exception: If expression is not of Bool type."
 
 executeStmt (While expr stmt) = do
     val <- executeExpr expr
@@ -321,7 +321,7 @@ executeStmt (While expr stmt) = do
                 ResultBreak -> return ResultUnit
                 _ -> return resultReturn 
         (ValueBool False) -> return ResultUnit
-        _ -> throwError $ "Ino Exception: While expression is not of Bool type."
+        _ -> throwError $ "Ino Interpreter Exception: While expression is not of Bool type."
 
 executeStmt (SExp expr) = do
     executeExpr expr
@@ -351,7 +351,7 @@ executeStmtDecl t (Init ident expr) = do
     value <- executeExpr expr 
     let valueType = getValueType value in case (t == valueType) of
         True -> declareObject ident t (ObjectValue value)
-        False -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot initialize `" ++ i ++ "` which is of " ++ show t ++ " type, with an expression of " ++ show valueType ++ " type."
+        False -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: Cannot initialize `" ++ i ++ "` which is of " ++ show t ++ " type, with an expression of " ++ show valueType ++ " type."
 
 -------------------------------------------------------------------------------------------
 -- Interpretery wyrażeń.
@@ -371,22 +371,55 @@ executeExprs (expr:exprs) = do
 -- Funkcja interpretująca wartość pojedynczego wyrażenia.
 executeExpr :: Expr -> InterpretMonad Value
 
-executeExpr (ELitInt value) = return $ ValueInteger value
-
 executeExpr (EVar ident) = do
     object <- getObject ident
     case object of
         (ObjectValue v) -> return $ v
-        _ -> throwError $ "Ino Exception: Function identifier is not an expression."
+        _ -> throwError $ "Ino Interpreter Exception: Function identifier is not an expression."
 
-executeExpr (EAdd exp1 op exp2) = do
-    val1 <- executeExpr exp1
-    val2 <- executeExpr exp2
-    case (val1, val2) of
-        (ValueInteger i1, ValueInteger i2) -> case op of
-            Plus -> return $ ValueInteger (i1 + i2)
-            Minus -> return $ ValueInteger (i1 - i2)
-        _ -> throwError $ "Ino Exception: Cannot apply any ADD operation on expressions of different types than Int."
+executeExpr (EMakeTuple exprs) = do
+    values <- executeExprs exprs
+    return $ ValueTuple values
+
+executeExpr (ETupleSubs indices ident) = do
+    object <- getObject ident
+    case object of
+        (ObjectValue (ValueTuple tuple)) -> do
+            subTuple <- getTuple (ValueTuple tuple) indices
+
+            return subTuple
+        _ -> let (Ident i) = ident in throwError $ "Ino Interpreter Exception: `" ++ i ++ "` is not a tuple."
+        
+executeExpr (ELitInt value) = return $ ValueInteger value
+
+executeExpr (ELitTrue) = do
+    return $ ValueBool True
+
+executeExpr (ELitFalse) = do
+    return $ ValueBool False
+
+executeExpr (EApp i exprs) = do
+    resultReturn <- executeFunction i exprs
+    case resultReturn of
+        ResultUnit -> throwError $ "Ino Interpreter Exception: Function ended without return statement."
+        ResultBreak -> throwError $ "Ino Interpreter Exception: Break statement without loop."
+        ResultContinue -> throwError $ "Ino Interpreter Exception: Continue statement without loop."
+        ResultValue r -> return r
+
+executeExpr (EString s) = do
+    return $ ValueString s
+    
+executeExpr (Neg exp) = do
+    val <- executeExpr exp
+    case val of
+        ValueInteger i -> return $ ValueInteger (negate i)
+        _ -> throwError $ "Ino Interpreter Exception: Cannot apply NEG to expression which is not of Int type."
+
+executeExpr (Not exp) = do
+    val <- executeExpr exp
+    case val of
+        ValueBool i -> return $ ValueBool (not i)
+        _ -> throwError $ "Ino Interpreter Exception: Cannot apply NOT to expression which is not of Bool type."
 
 executeExpr (EMul exp1 op exp2) = do
     val1 <- executeExpr exp1
@@ -395,12 +428,21 @@ executeExpr (EMul exp1 op exp2) = do
         (ValueInteger i1, ValueInteger i2) -> case op of
             Times -> return $ ValueInteger (i1 * i2)
             Div -> case i2 of
-                0 -> throwError $ "Ino Exception: Division by zero."
+                0 -> throwError $ "Ino Interpreter Exception: Division by zero."
                 _ -> return $ ValueInteger (i1 `div` i2)
             Mod -> case i2 of
-                0 -> throwError $ "Ino Exception: Modulo by zero."
+                0 -> throwError $ "Ino Interpreter Exception: Modulo by zero."
                 _ -> return $ ValueInteger (i1 `mod` i2)
-        _ -> throwError $ "Ino Exception: Cannot apply any MUL operation on expressions of different types than Int."
+        _ -> throwError $ "Ino Interpreter Exception: Cannot apply any MUL operation on expressions of different types than Int."
+
+executeExpr (EAdd exp1 op exp2) = do
+    val1 <- executeExpr exp1
+    val2 <- executeExpr exp2
+    case (val1, val2) of
+        (ValueInteger i1, ValueInteger i2) -> case op of
+            Plus -> return $ ValueInteger (i1 + i2)
+            Minus -> return $ ValueInteger (i1 - i2)
+        _ -> throwError $ "Ino Interpreter Exception: Cannot apply any ADD operation on expressions of different types than Int."
 
 executeExpr (ERel exp1 op exp2) = do
     val1 <- executeExpr exp1
@@ -413,61 +455,18 @@ executeExpr (ERel exp1 op exp2) = do
             GE -> return $ ValueBool (i1 >= i2)
             EQU -> return $ ValueBool (i1 == i2)
             NE -> return $ ValueBool (i1 /= i2)
-        _ -> throwError $ "Ino Exception: Cannot apply any RELATION operation on expressions of different types than Int."
+        _ -> throwError $ "Ino Interpreter Exception: Cannot apply any RELATION operation on expressions of different types than Int."
 
 executeExpr (EAnd exp1 exp2) = do
     val1 <- executeExpr exp1
     val2 <- executeExpr exp2
     case (val1, val2) of
         (ValueBool i1, ValueBool i2) -> return $ ValueBool (i1 && i2)
-        _ -> throwError $ "Ino Exception: Cannot apply AND operation to expressions of different types than Bool."
+        _ -> throwError $ "Ino Interpreter Exception: Cannot apply AND operation to expressions of different types than Bool."
 
 executeExpr (EOr exp1 exp2) = do
     val1 <- executeExpr exp1
     val2 <- executeExpr exp2
     case (val1, val2) of
         (ValueBool i1, ValueBool i2) -> return $ ValueBool (i1 || i2)
-        _ -> throwError $ "Ino Exception: Cannot apply OR operation to expressions of different types than Bool."
-
-executeExpr (Neg exp) = do
-    val <- executeExpr exp
-    case val of
-        ValueInteger i -> return $ ValueInteger (negate i)
-        _ -> throwError $ "Ino Exception: Cannot apply NEG to expression which is not of Int type."
-
-executeExpr (Not exp) = do
-    val <- executeExpr exp
-    case val of
-        ValueBool i -> return $ ValueBool (not i)
-        _ -> throwError $ "Ino Exception: Cannot apply NOT to expression which is not of Bool type."
-    
-executeExpr (ELitTrue) = do
-    return $ ValueBool True
-
-executeExpr (ELitFalse) = do
-    return $ ValueBool False
-
-executeExpr (EApp i exprs) = do
-    resultReturn <- executeFunction i exprs
-    case resultReturn of
-        ResultUnit -> throwError $ "Ino Exception: Function ended without return statement."
-        ResultBreak -> throwError $ "Ino Exception: Break statement without loop."
-        ResultContinue -> throwError $ "Ino Exception: Continue statement without loop."
-        ResultValue r -> return r
-
-executeExpr (EString s) = do
-    return $ ValueString s
-
-executeExpr (EMakeTuple exprs) = do
-    values <- executeExprs exprs
-    return $ ValueTuple values
-
-executeExpr (ETupleSubs indices ident) = do
-    object <- getObject ident
-
-    case object of
-        (ObjectValue (ValueTuple tuple)) -> do
-            subTuple <- getTuple (ValueTuple tuple) indices
-
-            return subTuple
-        _ -> let (Ident i) = ident in throwError $ "Ino Exception: `" ++ i ++ "` is not a tuple."
+        _ -> throwError $ "Ino Interpreter Exception: Cannot apply OR operation to expressions of different types than Bool."

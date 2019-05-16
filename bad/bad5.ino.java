@@ -1,7 +1,8 @@
 // za mało argumentów funkcji (lub za dużo)
 
 int f(int a, int b) {
-	printInt(a, b) ;
+	print(a, b) ;
+	return 1;
 }
 
 int main() {

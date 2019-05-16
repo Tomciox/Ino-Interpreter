@@ -4,7 +4,7 @@
 -------------------------------
 
 import System.Environment(getArgs)
-import System.IO(stdin, hGetContents)
+-- import System.IO(stdin, hGetContents)
 import System.Environment(getArgs, getProgName)
 import System.Exit(exitFailure, exitSuccess)
 
@@ -16,8 +16,8 @@ import AbsIno
 
 import InterpreterStateLib as ISL
 import InterpreterLib
-import TypeCheckStateLib as TCSL
-import TypeChecker
+import TypeCheckerStateLib as TCSL
+import TypeCheckerLib
 
 import ErrM
 
@@ -35,8 +35,9 @@ typeCheck program = do
     case result of
         Left error -> do
             putStrLn $ "\n" ++ error
+            exitFailure
         Right (_, state) -> do
-           putStrLn "\nIno TypeCheck succeeded."
+            putStrLn "\nIno TypeChecker succeeded."
 
 -------------------------------------------------------------------------------------------
 -- Funkcja uruchamiajaca interpretację zadanego programu.
@@ -51,7 +52,7 @@ interpret program = do
         Right (_, state) -> do
             -- print $ Map.toAscList (environment state)
             -- print $ Map.toAscList (store state)
-           putStrLn "\nIno interpretation succeeded."
+           putStrLn "\nIno Interpreter succeeded."
 
 runFile :: ParseFun Program -> FilePath -> IO ()
 runFile p f = readFile f >>= runProgram p
@@ -59,13 +60,13 @@ runFile p f = readFile f >>= runProgram p
 runProgram :: ParseFun Program -> String -> IO ()
 runProgram p s = let ts = myLLexer s in case p ts of
     (Bad s) -> do 
-        putStrLn "Parse Failed...\n"
+        putStrLn "Parse Failed..."
         putStrLn s
         exitFailure
-    (Ok tree) -> do 
-        putStrLn "Parse Successful!\n"
-        typeCheck tree
-        interpret tree
+    (Ok program) -> do 
+        putStrLn "Parse Successful."
+        typeCheck program
+        interpret program
         exitSuccess
 
 main :: IO ()

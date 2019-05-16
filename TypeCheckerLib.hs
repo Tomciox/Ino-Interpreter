@@ -5,9 +5,9 @@
 
 {-# LANGUAGE MultiParamTypeClasses, NamedFieldPuns#-}
 
-module TypeChecker where 
+module TypeCheckerLib where 
 
-import TypeCheckStateLib
+import TypeCheckerStateLib
 
 import LexIno
 import ParIno
@@ -20,7 +20,6 @@ import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Identity
-import Data.Maybe(catMaybes)
 
 -------------------------------------------------------------------------------------------
 -- Sprawdzanie poprawności typów programu.
@@ -114,8 +113,8 @@ typeCheckStmt (Ass ident exp) = do
     case info of 
         (VarInfo t2 _) -> case (t ==t2) of
             True -> return ()
-            False -> let (Ident i) = ident in throwError $ "Ino TypeCheck Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t2 ++ " type, an expression of " ++ show t ++ " type."
-        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeCheck Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
+            False -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t2 ++ " type, an expression of " ++ show t ++ " type."
+        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
 
 -- typeCheckStmt (AssTuple indices ident expr) = do
 --     object <- getObject ident
@@ -128,23 +127,23 @@ typeCheckStmt (Ass ident exp) = do
 --             (Info location t _) <- getIdentInfo ident
 --             updateStore location (ObjectValue modifiedTuple)
 --             return ResultUnit
---         _ -> let (Ident i) = ident in throwError $ "Ino Exception: `" ++ i ++ "` is not a tuple."
+--         _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a tuple."
 
 typeCheckStmt (Incr ident) = do
     info <- getIdentInfo ident
     case info of 
         (VarInfo t _) -> case t of
             Int -> return ()
-            _ -> let (Ident i) = ident in throwError $ "Ino TypeCheck Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
-        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeCheck Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
+            _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
+        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
 
 typeCheckStmt (Decr ident) = do
     info <- getIdentInfo ident
     case info of 
         (VarInfo t _) -> case t of
             Int -> return ()
-            _ -> let (Ident i) = ident in throwError $ "Ino TypeCheck Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
-        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeCheck Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
+            _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot increment `" ++ i ++ "` which is of " ++ show t ++ " type."
+        (FunInfo _ _ _) ->let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: Cannot assign to `" ++ i ++ "` which is not a variable."
 
 typeCheckStmt (Ret expr) = do
     (Return t) <- getReturnType
@@ -153,7 +152,7 @@ typeCheckStmt (Ret expr) = do
         True -> return ()
         False -> do
             funName <- getFunName
-            throwError $ "Ino Exception: return value of function `" ++ funName ++ "` is " ++ show t2 ++ " type, instead of " ++ show t ++ " type."
+            throwError $ "Ino TypeChecker Exception: return value of function `" ++ funName ++ "` is " ++ show t2 ++ " type, instead of " ++ show t ++ " type."
 
 typeCheckStmt VRet = do
     returnType <- getReturnType
@@ -161,13 +160,13 @@ typeCheckStmt VRet = do
         (Return Void) -> return ()
         _ -> do
             funName <- getFunName
-            throwError $ "Ino Exception: return value of function `" ++ funName ++ "` cannot be " ++ show Void ++ " type."
+            throwError $ "Ino TypeChecker Exception: return value of function `" ++ funName ++ "` cannot be " ++ show Void ++ " type."
 
 typeCheckStmt (Cond expr stmt) = do
     t <- typeCheckExpr expr
     case t of
         Bool -> typeCheckBlock (BlockS [stmt])
-        _ -> throwError $ "Ino TypeCheck Exception: If expression is not of Bool type."
+        _ -> throwError $ "Ino TypeChecker Exception: If expression is not of Bool type."
 
 typeCheckStmt (CondElse expr stmt1 stmt2) = do
     t <- typeCheckExpr expr
@@ -175,13 +174,13 @@ typeCheckStmt (CondElse expr stmt1 stmt2) = do
         Bool -> do
             typeCheckBlock (BlockS [stmt1])
             typeCheckBlock (BlockS [stmt2])
-        _ -> throwError $ "Ino TypeCheck Exception: If expression is not of Bool type."
+        _ -> throwError $ "Ino TypeChecker Exception: If expression is not of Bool type."
 
 typeCheckStmt (While expr stmt) = do
     t <- typeCheckExpr expr
     case t of
         Bool -> typeCheckBlock (BlockS [stmt])
-        _ -> throwError $ "Ino TypeCheck Exception: While expression is not of Bool type."
+        _ -> throwError $ "Ino TypeChecker Exception: While expression is not of Bool type."
 
 typeCheckStmt (SExp expr) = do
     typeCheckExpr expr
@@ -241,20 +240,59 @@ typeCheckExprs (expr:exprs) = do
 
 typeCheckExpr :: Expr -> TypeCheckMonad Type
 
-typeCheckExpr (ELitInt _) = return Int
-
 typeCheckExpr (EVar ident) = do
     info <- getIdentInfo ident
     case info of 
         (VarInfo t _) -> return t
         _ -> throwError $ "Ino TypeChecker Exception: Function identifier is not an expression."
 
-typeCheckExpr (EAdd exp1 _ exp2) = do
-    t1 <- typeCheckExpr exp1
-    t2 <- typeCheckExpr exp2
-    case (t1, t2) of
-        (Int, Int) -> return Int
-        _ -> throwError $ "Ino TypeChecker Exception: Cannot apply any ADD operation on expressions of different types than Int."
+-- typeCheckExpr (ETupleSubs indices ident) = do
+--     object <- getObject ident
+
+--     case object of
+--         (ObjectValue (ValueTuple tuple)) -> do
+--             subTuple <- getTuple (ValueTuple tuple) indices
+
+--             return subTuple
+--         _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a tuple."
+
+-- typeCheckExpr (EMakeTuple exprs) = do
+--     values <- typeCheckExprs exprs
+--     return $ ValueTuple values
+
+typeCheckExpr (ELitInt _) = return Int
+
+typeCheckExpr (ELitTrue) =
+    return Bool
+
+typeCheckExpr (ELitFalse) =
+    return Bool
+
+typeCheckExpr (EApp ident exprs) = do
+    case ident of
+        (Ident "print") -> return Void
+        _ -> do
+            identInfo <- getIdentInfo ident
+            let (Ident i) = ident in case identInfo of
+                (VarInfo _ _) -> throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a function." 
+                (FunInfo t ts _) -> do
+                    parseArgsApp i exprs ts
+                    return t
+
+typeCheckExpr (EString _) = do
+    return Str
+
+typeCheckExpr (Neg exp) = do
+    t <- typeCheckExpr exp
+    case t of
+        Int -> return Int
+        _ -> throwError $ "Ino TypeChecker Exception: Cannot apply NEG to expression which is not of Int type."
+
+typeCheckExpr (Not exp) = do
+    t <- typeCheckExpr exp
+    case t of
+        Bool -> return Bool
+        _ -> throwError $ "Ino TypeChecker Exception: Cannot apply NOT to expression which is not of Bool type."
 
 typeCheckExpr (EMul exp1 op exp2) = do
     t1 <- typeCheckExpr exp1
@@ -262,6 +300,13 @@ typeCheckExpr (EMul exp1 op exp2) = do
     case (t1, t2) of
         (Int, Int) -> return Int
         _ -> throwError $ "Ino TypeChecker Exception: Cannot apply any MUL operation on expressions of different types than Int."
+
+typeCheckExpr (EAdd exp1 _ exp2) = do
+    t1 <- typeCheckExpr exp1
+    t2 <- typeCheckExpr exp2
+    case (t1, t2) of
+        (Int, Int) -> return Int
+        _ -> throwError $ "Ino TypeChecker Exception: Cannot apply any ADD operation on expressions of different types than Int."
 
 typeCheckExpr (ERel exp1 op exp2) = do
     t1 <- typeCheckExpr exp1
@@ -284,48 +329,9 @@ typeCheckExpr (EOr exp1 exp2) = do
         (Bool, Bool) -> return Int
         _ -> throwError $ "Ino TypeChecker Exception: Cannot apply OR operation to expressions of different types than Bool."
 
-typeCheckExpr (Neg exp) = do
-    t <- typeCheckExpr exp
-    case t of
-        Int -> return Int
-        _ -> throwError $ "Ino TypeChecker Exception: Cannot apply NEG to expression which is not of Int type."
-
-typeCheckExpr (Not exp) = do
-    t <- typeCheckExpr exp
-    case t of
-        Bool -> return Bool
-        _ -> throwError $ "Ino TypeChecker Exception: Cannot apply NOT to expression which is not of Bool type."
     
-typeCheckExpr (ELitTrue) =
-    return Bool
 
-typeCheckExpr (ELitFalse) =
-    return Bool
 
-typeCheckExpr (EApp ident exprs) = do
-    identInfo <- getIdentInfo ident
-    let (Ident i) = ident in case identInfo of
-        (VarInfo _ _) -> throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a function." 
-        (FunInfo t ts _) -> do
-            parseArgsApp i exprs ts
-            return t
-
-typeCheckExpr (EString _) = do
-    return Str
-
--- typeCheckExpr (EMakeTuple exprs) = do
---     values <- typeCheckExprs exprs
---     return $ ValueTuple values
-
--- typeCheckExpr (ETupleSubs indices ident) = do
---     object <- getObject ident
-
---     case object of
---         (ObjectValue (ValueTuple tuple)) -> do
---             subTuple <- getTuple (ValueTuple tuple) indices
-
---             return subTuple
---         _ -> let (Ident i) = ident in throwError $ "Ino TypeChecker Exception: `" ++ i ++ "` is not a tuple."
 
 -------------------------------------------------------------------------------------------
 -- Funkcje pomocnicze do aplikacji.
