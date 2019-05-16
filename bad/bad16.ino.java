@@ -1,8 +1,8 @@
-boolean f(boolean b) {
-	return !b;
+int f() {
+	return 1;
 }
-
 int main() {
-	boolean b1 = f(false);
+	f = 10;
+	print(f, "\n");
 	return 0;
 }

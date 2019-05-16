@@ -36,7 +36,7 @@ typeCheck program = do
         Left error -> do
             putStrLn $ "\n" ++ error
         Right (_, state) -> do
-           putStrLn "\nIno type check succeeded."
+           putStrLn "\nIno TypeCheck succeeded."
 
 -------------------------------------------------------------------------------------------
 -- Funkcja uruchamiajaca interpretację zadanego programu.
@@ -64,7 +64,7 @@ runProgram p s = let ts = myLLexer s in case p ts of
         exitFailure
     (Ok tree) -> do 
         putStrLn "Parse Successful!\n"
-        -- typeCheck tree
+        typeCheck tree
         interpret tree
         exitSuccess
 

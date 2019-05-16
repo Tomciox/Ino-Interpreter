@@ -7,7 +7,6 @@
 
 module InterpreterLib where 
 
-import TypeChecker
 import InterpreterStateLib
 import TupleHelper
 import PrintHelper
@@ -119,10 +118,10 @@ parseArgs s (arg:args) (expr:exprs) = do
     funArgVals <- parseArgs s args exprs
     return (funArgVal:funArgVals)
 
-parseArgs s (arg:args) _ = do
+parseArgs s (arg:args) [] = do
     throwError $ "Ino Exception: Too few arguments of function " ++ s ++ "."
 
-parseArgs s _ (expr:exprs) = do
+parseArgs s [] (expr:exprs) = do
     throwError $ "Ino Exception: Too many arguments of function " ++ s ++ "."
 
 -- Wyliczenie wartości jednego argumentu, przed uruchomieniem funkcji, w zależności od tego czy jest on przekazany przez wartość, czy referencję.
@@ -231,6 +230,12 @@ executeStmt :: Stmt -> InterpretMonad ResultReturn
 executeStmt (Empty) = do
     return ResultUnit
 
+executeStmt Break = 
+    return ResultBreak
+
+executeStmt Continue = 
+    return ResultContinue
+    
 executeStmt (BStmt b) = do
     executeBlock b
 
@@ -238,13 +243,33 @@ executeStmt (Decl t declarations) = do
     executeStmtDecls t declarations
     return ResultUnit
 
+executeStmt (FunDecl definition) = do
+    environment <- getEnvironment
+    let (FnDef t ident _ _) = definition in do
+        declareObject ident t (ObjectFunDef definition environment)
+        return ResultUnit
+        
 executeStmt (Ass ident exp) = do
     (Info location t _) <- getIdentInfo ident
     newValue <- executeExpr exp
     let newValueType = getValueType newValue in case (t == newValueType) of
         True -> updateStore location (ObjectValue newValue)
+        -- TODO assign to function bug ???
         _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot assign to `" ++ i ++ "` which is of " ++ show t ++ " type, an expression of " ++ show newValueType ++ " type."
     return ResultUnit
+
+executeStmt (AssTuple indices ident expr) = do
+    object <- getObject ident
+    case object of
+        (ObjectValue (ValueTuple tuple)) -> do
+            newValue <- executeExpr expr
+
+            modifiedTuple <- assignTuple (ValueTuple tuple) indices newValue
+
+            (Info location t _) <- getIdentInfo ident
+            updateStore location (ObjectValue modifiedTuple)
+            return ResultUnit
+        _ -> let (Ident i) = ident in throwError $ "Ino Exception: `" ++ i ++ "` is not a tuple."
 
 executeStmt (Incr ident) = do
     (Info location t _) <- getIdentInfo ident
@@ -263,6 +288,13 @@ executeStmt (Decr ident) = do
             updateStore location (ObjectValue (ValueInteger (value - 1)))
         _ -> let (Ident i) = ident in throwError $ "Ino Exception: Cannot decrement `" ++ i ++ "` which is of " ++ show t ++ " type."
     return ResultUnit
+
+executeStmt (Ret expr) = do
+    value <- executeExpr expr
+    return $ ResultValue value
+
+executeStmt VRet = 
+    return $ ResultValue (ValueVoid)
 
 executeStmt (Cond expr stmt) = do
     val <- executeExpr expr
@@ -294,38 +326,6 @@ executeStmt (While expr stmt) = do
 executeStmt (SExp expr) = do
     executeExpr expr
     return ResultUnit
-
-executeStmt (FunDecl definition) = do
-    environment <- getEnvironment
-    let (FnDef t ident _ _) = definition in do
-        declareObject ident t (ObjectFunDef definition environment)
-        return ResultUnit
-
-executeStmt Break = 
-    return ResultBreak
-
-executeStmt Continue = 
-    return ResultContinue
-
-executeStmt (Ret expr) = do
-    value <- executeExpr expr
-    return $ ResultValue value
-
-executeStmt VRet = 
-    return $ ResultValue (ValueVoid)
-
-executeStmt (AssTuple indices ident expr) = do
-    object <- getObject ident
-    case object of
-        (ObjectValue (ValueTuple tuple)) -> do
-            newValue <- executeExpr expr
-
-            modifiedTuple <- assignTuple (ValueTuple tuple) indices newValue
-
-            (Info location t _) <- getIdentInfo ident
-            updateStore location (ObjectValue modifiedTuple)
-            return ResultUnit
-        _ -> let (Ident i) = ident in throwError $ "Ino Exception: `" ++ i ++ "` is not a tuple."
 
 -------------------------------------------------------------------------------------------
 -- Funkcje pomocnicze dla statementów deklaracji zmiennych.
@@ -374,8 +374,8 @@ executeExpr :: Expr -> InterpretMonad Value
 executeExpr (ELitInt value) = return $ ValueInteger value
 
 executeExpr (EVar ident) = do
-    value <- getObject ident
-    case value of
+    object <- getObject ident
+    case object of
         (ObjectValue v) -> return $ v
         _ -> throwError $ "Ino Exception: Function identifier is not an expression."
 

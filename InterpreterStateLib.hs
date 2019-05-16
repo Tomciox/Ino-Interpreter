@@ -137,7 +137,7 @@ putEnvironment :: Environment -> InterpretMonad ()
 putEnvironment environment = modify $ \state -> 
     state { environment }
 
--- Funkcja aktualizująca aktualne środowisko zadanym przekształceniem.
+-- Funkcja aktualizująca aktualne środowisko o nowy identyfikator.
 updateEnvironment :: Ident -> IdentInfo -> InterpretMonad ()
 updateEnvironment ident info = modify $ \state -> 
     state { environment = Map.insert ident info (environment state) }
