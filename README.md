@@ -19,7 +19,7 @@ ghc --make Interpreter.hs -o Interpreter
 /home/students/inf/PUBLIC/MRJP/ghc-8.2.2/bin/ghc --make Interpreter.hs -o Interpreter
 ```
 
-GHC na student wymaga jeszcze doinstalowania mtl dla pakietu Control.Monad:
+GHC na students wymaga jeszcze doinstalowania mtl dla pakietu Control.Monad:
 ```bash
 /home/students/inf/PUBLIC/MRJP/ghc-8.2.2/bin/cabal update
 /home/students/inf/PUBLIC/MRJP/ghc-8.2.2/bin/cabal install mtl
@@ -69,17 +69,12 @@ Wszystkie funkcjonalności do 20pkt.
 
 W punkcie 7. wybrano przekazywanie parametrów przez wartość/referencję. Składnia jak w C++, z użyciem &. 
 
-## (4pkt) 
-Statyczne typowanie.
+(4pkt) Statyczne typowanie.
 
-## (2pkt) 
-Dowolnie zagnieżdżone definicje funkcji / procedur z zachowaniem poprawności statycznego wiązania identyfikatorów, przykład w good/good5.
+(2pkt) Dowolnie zagnieżdżone definicje funkcji / procedur z zachowaniem poprawności statycznego wiązania identyfikatorów, przykład w good/good5.
 
-## (1pkt) 
-Operacje przerywające pętlę while - break i continue, przykład w good/good8.
+(1pkt) Operacje przerywające pętlę while - break i continue, przykład w good/good8.
 
-## (2pkt) 
-Dowolnie zagnieżdżone krotki z przypisaniem. Składnia podobna do C++, przykład w good/good9.
+(2pkt) Dowolnie zagnieżdżone krotki z przypisaniem. Składnia podobna do C++, przykład w good/good9.
 
-## Dodatkowo
-Nie było umieszczone w punktowanych funkcjonalnościach, ani w projekcie języka, interpreter posiada odśmiecacz zmiennych z pamięci, przykład działania w good/good10.
+(Dodatkowo) Nie było umieszczone w punktowanych funkcjonalnościach, ani w projekcie języka, interpreter posiada odśmiecacz zmiennych z pamięci, przykład działania w good/good10.
