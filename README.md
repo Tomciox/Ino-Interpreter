@@ -7,13 +7,15 @@ make && make clean
 
 Gdyby rozwiązanie miało być budowane na students, w pliku Makefile należy zmienić:
 ```bash
-bnfc Ino.ebnf # na
+bnfc Ino.ebnf 
+# na
 /home/students/inf/PUBLIC/MRJP/bin/bnfc Ino.ebnf
 ```
 
 Oraz:
 ```bash
-ghc --make Interpreter.hs -o Interpreter # na
+ghc --make Interpreter.hs -o Interpreter 
+# na
 /home/students/inf/PUBLIC/MRJP/ghc-8.2.2/bin/ghc --make Interpreter.hs -o Interpreter
 ```
 
@@ -63,16 +65,21 @@ Zbiór funkcji pomocniczych dla operacji na tuplach.
 
 # Zrealizowane konstrukcje
 
-## Wszystkie funkcjonalności do 20pkt. 
+Wszystkie funkcjonalności do 20pkt. 
 
-## W punkcie 7. wybrano przekazywanie parametrów przez wartość/referencję. Składnia jak w C++, z użyciem &. 
-## (4pkt) Statyczne typowanie.
+W punkcie 7. wybrano przekazywanie parametrów przez wartość/referencję. Składnia jak w C++, z użyciem &. 
 
-## (2pkt) Dowolnie zagnieżdżone definicje funkcji / procedur z zachowaniem poprawności
-statycznego wiązania identyfikatorów, przykład w good/good5.
+## (4pkt) 
+Statyczne typowanie.
 
-## (1pkt) Operacje przerywające pętlę while - break i continue, przykład w good/good8.
+## (2pkt) 
+Dowolnie zagnieżdżone definicje funkcji / procedur z zachowaniem poprawności statycznego wiązania identyfikatorów, przykład w good/good5.
 
-## (2pkt) Dowolnie zagnieżdżone krotki z przypisaniem. Składnia podobna do C++, przykład w good/good9.
+## (1pkt) 
+Operacje przerywające pętlę while - break i continue, przykład w good/good8.
 
-## Dodatkowo, co nie było umieszczone w punktowanych funkcjonalnościach, ani w projekcie języka, interpreter posiada odśmiecacz zmiennych z pamięci, przykład działania w good/good10.
+## (2pkt) 
+Dowolnie zagnieżdżone krotki z przypisaniem. Składnia podobna do C++, przykład w good/good9.
+
+## Dodatkowo
+Nie było umieszczone w punktowanych funkcjonalnościach, ani w projekcie języka, interpreter posiada odśmiecacz zmiennych z pamięci, przykład działania w good/good10.
