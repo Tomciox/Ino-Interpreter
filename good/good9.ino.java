@@ -18,7 +18,7 @@ int main() {
 	print(t, "\n");
 
 	// Wyłuskanie zadanego elementu tupli.
-	tuple<int, string> t2 = get<1012312>(t);
+	tuple<int, string> t2 = get<3>(t);
 	print(t2, "\n");
 
 	tuple<tuple<tuple<int, int>>> t3 = make_tuple(make_tuple(make_tuple(2, 3)));
