@@ -1,6 +1,6 @@
 # Uruchomienie
 
-## Zbudowanie interpretera.
+## Zbudowanie interpretera
 ```bash
 make && make clean
 ```
@@ -39,6 +39,8 @@ chmod+x runTests.sh
 ```
 
 # Opis rozwiązania
+
+Język jest wzorowany na Latte z treści zadania. Niektóre funkcjonalności zostały zapożyczone z C++, jednak są to standardowe konstrukcje.
 
 ## Parsowanie
 Odbywa się przy użyciu generatora parserów bnfc.
