@@ -25,7 +25,13 @@ GHC na students wymaga jeszcze doinstalowania mtl dla pakietu Control.Monad:
 /home/students/inf/PUBLIC/MRJP/ghc-8.2.2/bin/cabal install mtl
 ```
 
-## Uruchomienie testów interpretera na plikach przykładowych.
+## Uruchomienie interpretera
+Interpreter jest uruchamiany poleceniem:
+```bash
+./Interpreter file/to/path
+```
+
+## Uruchomienie testów interpretera na plikach przykładowych
 Skrypt wypisuje na konsolę wszytskie testy w kolejności alfabetycznej, oraz efekt działania interpretera na nich (najpierw good/, potem bad/).
 ```bash
 chmod+x runTests.sh  
